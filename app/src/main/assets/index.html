@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Device Info</title>
+    <script type="text/javascript">
+        function getDeviceInfo() {
+            // Call the Android interface method
+            var deviceInfo = JSON.parse(Android.getDeviceInfo());
+            
+            // Display the information
+            document.getElementById('model').textContent = deviceInfo.modelName;
+            document.getElementById('manufacturer').textContent = deviceInfo.manufacturer;
+            document.getElementById('ram').textContent = deviceInfo.ramSizeGB.toFixed(1) + ' GB';
+            document.getElementById('storage').textContent = deviceInfo.storageSizeGB.toFixed(1) + ' GB';
+            document.getElementById('android').textContent = deviceInfo.androidVersion;
+            document.getElementById('cores').textContent = deviceInfo.processorCores;
+            document.getElementById('battery').textContent = deviceInfo.batteryLevel + '%';
+        }
+    </script>
+</head>
+<body onload="getDeviceInfo()">
+    <h2>Device Information</h2>
+    <p>Model: <span id="model"></span></p>
+    <p>Manufacturer: <span id="manufacturer"></span></p>
+    <p>RAM: <span id="ram"></span></p>
+    <p>Storage: <span id="storage"></span></p>
+    <p>Android Version: <span id="android"></span></p>
+    <p>Processor Cores: <span id="cores"></span></p>
+    <p>Battery Level: <span id="battery"></span></p>
+</body>
+</html>

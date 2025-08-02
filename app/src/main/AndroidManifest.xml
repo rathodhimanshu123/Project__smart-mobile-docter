@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.smartmobiledoctor">
+
+    <uses-permission android:name="android.permission.BATTERY_STATS" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+
+    <application>
+        <service
+            android:name=".services.DeviceInfoService"
+            android:enabled="true"
+            android:exported="false" />
+    </application>
+
+</manifest>

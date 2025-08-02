@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnosis Results - Smart Mobile Doctor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Smart Mobile Doctor</h1>
+            <p>Your Phone Diagnosis Results</p>
+        </header>
+        
+        <main>
+            <div class="results-section">
+                <div class="results-container">
+                    <div class="results-header">
+                        <h2>Diagnosis Complete</h2>
+                    </div>
+                    
+                    <div class="results-content">
+                        <div class="image-info-container">
+                            <div class="uploaded-image">
+                                <h3>Uploaded Image</h3>
+                                <img src="{{ url_for('static', filename=image_path) }}" alt="Uploaded Phone Screenshot">
+                            </div>
+                            
+                            <div class="extracted-info">
+                                <h3>Extracted Information</h3>
+                                <table>
+                                    <tr>
+                                        <th>Model:</th>
+                                        <td>{{ phone_info.model }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>RAM:</th>
+                                        <td>{{ phone_info.ram }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>OS Version:</th>
+                                        <td>{{ phone_info.os_version }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Storage:</th>
+                                        <td>{{ phone_info.storage }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Processor:</th>
+                                        <td>{{ phone_info.processor }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Battery:</th>
+                                        <td>{{ phone_info.battery }}</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <div class="diagnosis-result">
+                            <div class="issue-box">
+                                <h3>Detected Issue</h3>
+                                <div class="issue-content">
+                                    <div class="issue-icon">⚠️</div>
+                                    <div class="issue-text">{{ issue }}</div>
+                                </div>
+                            </div>
+                            
+                            <div class="solution-box">
+                                <h3>Recommended Solution</h3>
+                                <div class="solution-content">
+                                    <div class="solution-icon">💡</div>
+                                    <div class="solution-text">{{ solution }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="qr-code-section">
+                        <h3>Generate QR Code</h3>
+                        <p>Generate a QR code to collect more detailed information from your phone.</p>
+                        <button id="generateQRBtn" class="qr-btn">Generate QR Code</button>
+                        <div id="qrCodeDisplay" style="display: none;">
+                            <img id="qrCodeImage" alt="QR Code" style="margin: 20px 0;">
+                            <p>Scan this QR code with your phone to provide additional diagnostic information.</p>
+                        </div>
+                    </div>
+
+                    <div class="results-footer">
+                        <a href="{{ url_for('index') }}" class="back-btn">Diagnose Another Phone</a>
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <footer>
+            <p>Smart Mobile Doctor &copy; 2023 - 5th Semester Group Project</p>
+        </footer>
+    </div>
+
+    <script>
+        document.getElementById('generateQRBtn').addEventListener('click', async function() {
+            try {
+                // Disable the button and show loading state
+                this.disabled = true;
+                this.textContent = 'Generating...';
+                
+                // Request the QR code
+                const response = await fetch('/generate_qr');
+                
+                if (!response.ok) {
+                    throw new Error('Failed to generate QR code');
+                }
+                
+                // Get the image blob
+                const blob = await response.blob();
+                const imageUrl = URL.createObjectURL(blob);
+                
+                // Display the QR code
+                const qrCodeDisplay = document.getElementById('qrCodeDisplay');
+                const qrCodeImage = document.getElementById('qrCodeImage');
+                
+                qrCodeImage.src = imageUrl;
+                qrCodeDisplay.style.display = 'block';
+                
+                // Update button state
+                this.textContent = 'QR Code Generated';
+                
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to generate QR code. Please try again.');
+                
+                // Reset button state
+                this.disabled = false;
+                this.textContent = 'Generate QR Code';
+            }
+        });
+    </script>
+</body>
+</html>
