@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug - Smart Mobile Doctor</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .debug-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        button { padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Debug Page - Smart Mobile Doctor</h1>
+    
+    <div class="debug-section info">
+        <h3>📋 Current Session Info</h3>
+        <p><strong>Session ID:</strong> <span id="sessionId">Loading...</span></p>
+        <p><strong>Base URL:</strong> <span id="baseUrl">Loading...</span></p>
+    </div>
+
+    <div class="debug-section">
+        <h3>🧪 Test Mobile Data Collection</h3>
+        <p>This will simulate the mobile data collection process:</p>
+        <button onclick="testDataCollection()">Test Data Collection</button>
+        <button onclick="checkStoredData()">Check Stored Data</button>
+        <div id="testResults"></div>
+    </div>
+
+    <div class="debug-section">
+        <h3>📱 Mobile Page Test</h3>
+        <p>Generate a test QR code and scan it with your phone:</p>
+        <button onclick="generateTestQR()">Generate Test QR</button>
+        <div id="qrResult"></div>
+    </div>
+
+    <div class="debug-section">
+        <h3>🔍 Browser Information</h3>
+        <div id="browserInfo"></div>
+    </div>
+
+    <script>
+        // Display current session info
+        document.getElementById('sessionId').textContent = '{{ session.get("qr_session_id", "No session") }}';
+        document.getElementById('baseUrl').textContent = '{{ get_base_url() }}';
+
+        // Display browser information
+        function displayBrowserInfo() {
+            const info = {
+                userAgent: navigator.userAgent,
+                platform: navigator.platform,
+                language: navigator.language,
+                cookieEnabled: navigator.cookieEnabled,
+                onLine: navigator.onLine,
+                deviceMemory: navigator.deviceMemory,
+                hardwareConcurrency: navigator.hardwareConcurrency,
+                screen: {
+                    width: window.screen.width,
+                    height: window.screen.height,
+                    colorDepth: window.screen.colorDepth,
+                    pixelRatio: window.devicePixelRatio
+                }
+            };
+            
+            document.getElementById('browserInfo').innerHTML = `
+                <pre>${JSON.stringify(info, null, 2)}</pre>
+            `;
+        }
+
+        // Test data collection
+        async function testDataCollection() {
+            const results = document.getElementById('testResults');
+            results.innerHTML = '<p>Testing data collection...</p>';
+            
+            try {
+                const response = await fetch('/api/submit_phone_data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: 'test-session-' + Date.now(),
+                        phone_data: {
+                            model: 'Test Device',
+                            manufacturer: 'Test Manufacturer',
+                            androidVersion: 'Test Android',
+                            batteryLevel: '50%',
+                            screenResolution: '1920x1080',
+                            testData: true,
+                            timestamp: new Date().toISOString()
+                        }
+                    })
+                });
+                
+                const result = await response.json();
+                results.innerHTML = `
+                    <div class="success">
+                        <h4>✅ Test Successful</h4>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    </div>
+                `;
+            } catch (error) {
+                results.innerHTML = `
+                    <div class="error">
+                        <h4>❌ Test Failed</h4>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Check stored data
+        async function checkStoredData() {
+            const results = document.getElementById('testResults');
+            results.innerHTML = '<p>Checking stored data...</p>';
+            
+            try {
+                const sessionId = '{{ session.get("qr_session_id", "") }}';
+                if (!sessionId) {
+                    results.innerHTML = '<div class="error"><p>No session ID available</p></div>';
+                    return;
+                }
+                
+                const response = await fetch(`/debug/phone_data/${sessionId}`);
+                const result = await response.json();
+                
+                results.innerHTML = `
+                    <div class="info">
+                        <h4>📊 Stored Data Status</h4>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    </div>
+                `;
+            } catch (error) {
+                results.innerHTML = `
+                    <div class="error">
+                        <h4>❌ Check Failed</h4>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Generate test QR
+        async function generateTestQR() {
+            const results = document.getElementById('qrResult');
+            results.innerHTML = '<p>Generating QR code...</p>';
+            
+            try {
+                const response = await fetch('/generate_qr');
+                if (!response.ok) {
+                    throw new Error('Failed to generate QR');
+                }
+                
+                const blob = await response.blob();
+                const imageUrl = URL.createObjectURL(blob);
+                
+                results.innerHTML = `
+                    <div class="success">
+                        <h4>✅ QR Code Generated</h4>
+                        <img src="${imageUrl}" alt="QR Code" style="max-width: 200px;">
+                        <p>Scan this QR code with your phone to test the mobile data collection.</p>
+                    </div>
+                `;
+            } catch (error) {
+                results.innerHTML = `
+                    <div class="error">
+                        <h4>❌ QR Generation Failed</h4>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Initialize
+        displayBrowserInfo();
+    </script>
+</body>
+</html> 

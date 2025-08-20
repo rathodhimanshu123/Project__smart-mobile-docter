@@ -1,87 +1,319 @@
-document.addEventListener('DOMContentLoaded', async () => {
-    const status = document.getElementById('status');
-    const collectedData = document.getElementById('collected-data');
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Mobile.js loaded - starting device information collection');
+    
+    const status = document.getElementById('status-message');
+    const phoneData = document.getElementById('phone-data');
     const dataList = document.getElementById('data-list');
-    const sendDataBtn = document.getElementById('send-data');
+    const sessionId = document.body.dataset.sessionId;
+    const baseUrl = document.body.dataset.baseUrl || '';
+    const loadingSpinner = document.getElementById('loading-spinner');
+    const errorDisplay = document.getElementById('error-display');
+    const manualRedirect = document.getElementById('manual-redirect');
 
-    // Add scanning animation
-    status.classList.add('scanning');
+    console.log('Session ID:', sessionId, 'Base URL:', baseUrl);
 
-    // Collect phone data
-    const phoneData = {
-        userAgent: navigator.userAgent,
-        platform: navigator.platform,
-        language: navigator.language,
-        screenResolution: `${window.screen.width}x${window.screen.height}`,
-        screenColorDepth: window.screen.colorDepth,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        connection: navigator.connection ? {
-            type: navigator.connection.effectiveType,
-            downlink: navigator.connection.downlink,
-            rtt: navigator.connection.rtt
-        } : 'Not available',
-        deviceMemory: navigator.deviceMemory || 'Not available',
-        hardwareConcurrency: navigator.hardwareConcurrency || 'Not available'
-    };
-
-    // Display collected data
-    status.classList.remove('scanning');
-    status.textContent = 'Data collected successfully!';
-    status.classList.add('success');
-    
-    collectedData.classList.remove('hidden');
-    
-    // Populate data list
-    for (const [key, value] of Object.entries(phoneData)) {
-        const li = document.createElement('li');
-        if (typeof value === 'object' && value !== null) {
-            li.innerHTML = `<strong>${formatKey(key)}:</strong> ${JSON.stringify(value)}`;
-        } else {
-            li.innerHTML = `<strong>${formatKey(key)}:</strong> ${value}`;
+    // Function to display errors
+    function displayError(message) {
+        console.error('Error:', message);
+        if (status) status.style.display = 'none';
+        if (errorDisplay) {
+            errorDisplay.textContent = `Error: ${message}`;
+            errorDisplay.style.display = 'block';
         }
-        dataList.appendChild(li);
+        if (loadingSpinner) loadingSpinner.style.display = 'none';
     }
 
-    // Handle data submission
-    sendDataBtn.addEventListener('click', async () => {
+    // Function to add data item
+    function addDataItem(label, value) {
         try {
-            status.textContent = 'Sending data...';
-            status.classList.add('scanning');
+            const div = document.createElement('div');
+            div.className = 'data-item';
+            div.innerHTML = `<strong>${label}:</strong> ${value}`;
+            dataList.appendChild(div);
+            console.log(`Added data item: ${label} = ${value}`);
+        } catch (e) {
+            console.warn('Error adding data item:', e);
+        }
+    }
+
+    // Function to get basic device information
+    function getBasicDeviceInfo() {
+        try {
+            const ua = navigator.userAgent;
+            console.log('User Agent:', ua);
             
-            const response = await fetch('/api/submit_phone_data', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    session_id: sessionId,
-                    phone_data: phoneData
-                })
+            // Extract Android version
+            const androidMatch = ua.match(/Android\s([0-9]+(\.[0-9]+)?)/);
+            const androidVersion = androidMatch ? androidMatch[1] : 'Not Android';
+            
+            // Extract device model (simplified)
+            let model = 'Unknown';
+            if (ua.includes('Samsung')) model = 'Samsung Device';
+            else if (ua.includes('iPhone')) model = 'iPhone';
+            else if (ua.includes('OnePlus')) model = 'OnePlus Device';
+            else if (ua.includes('Pixel')) model = 'Google Pixel';
+            else if (ua.includes('Xiaomi')) model = 'Xiaomi Device';
+            else if (ua.includes('Huawei')) model = 'Huawei Device';
+            else if (ua.includes('K')) model = 'Android Device';
+            
+            // Manufacturer
+            let manufacturer = 'Unknown';
+            if (ua.includes('Samsung')) manufacturer = 'Samsung';
+            else if (ua.includes('iPhone') || ua.includes('iPad')) manufacturer = 'Apple';
+            else if (ua.includes('OnePlus')) manufacturer = 'OnePlus';
+            else if (ua.includes('Pixel')) manufacturer = 'Google';
+            else if (ua.includes('Xiaomi')) manufacturer = 'Xiaomi';
+            else if (ua.includes('Huawei')) manufacturer = 'Huawei';
+            else if (ua.includes('K')) manufacturer = 'Android';
+            
+            return {
+                model: model,
+                manufacturer: manufacturer,
+                androidVersion: androidVersion,
+                userAgent: ua.substring(0, 100) + '...'
+            };
+        } catch (e) {
+            console.warn('Error getting basic device info:', e);
+            return {
+                model: 'Unknown',
+                manufacturer: 'Unknown',
+                androidVersion: 'Unknown',
+                userAgent: 'Unknown'
+            };
+        }
+    }
+
+    // Function to get battery information (simplified)
+    function getBatteryInfo() {
+        try {
+            if (navigator.getBattery) {
+                // Use a simple promise-based approach
+                return new Promise((resolve) => {
+                    navigator.getBattery().then(battery => {
+                        resolve({
+                            level: `${Math.round(battery.level * 100)}%`,
+                            charging: battery.charging ? 'Charging' : 'Not charging'
+                        });
+                    }).catch(() => {
+                        resolve({ level: 'Not available', charging: 'Unknown' });
+                    });
+                });
+            }
+        } catch (e) {
+            console.warn('Battery API error:', e);
+        }
+        return Promise.resolve({ level: 'Not available', charging: 'Unknown' });
+    }
+
+    // Function to get screen information
+    function getScreenInfo() {
+        try {
+            return {
+                resolution: `${window.screen.width}x${window.screen.height}`,
+                colorDepth: `${window.screen.colorDepth} bit`,
+                pixelRatio: window.devicePixelRatio || 'Not available'
+            };
+        } catch (e) {
+            console.warn('Error getting screen info:', e);
+            return {
+                resolution: 'Unknown',
+                colorDepth: 'Unknown',
+                pixelRatio: 'Not available'
+            };
+        }
+    }
+
+    // Function to get network information
+    function getNetworkInfo() {
+        try {
+            const info = { type: 'Unknown', speed: 'Unknown' };
+            if (navigator.connection) {
+                info.type = navigator.connection.effectiveType || 'Unknown';
+                info.speed = navigator.connection.downlink ? `${navigator.connection.downlink} Mbps` : 'Unknown';
+            }
+            return info;
+        } catch (e) {
+            console.warn('Error getting network info:', e);
+            return { type: 'Unknown', speed: 'Unknown' };
+        }
+    }
+
+    // Function to send data (simplified)
+    function sendData(data) {
+        return new Promise((resolve, reject) => {
+            // Get the server IP from the data attribute
+            const serverIp = document.body.dataset.serverIp || '127.0.0.1';
+            console.log('Using server IP for API call:', serverIp);
+            
+            // Construct the API URL using the server IP
+            const apiUrl = `http://${serverIp}:8080/api/submit_phone_data`;
+            console.log('API URL:', apiUrl);
+            
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', apiUrl, true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.timeout = 10000; // 10 second timeout
+            
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    try {
+                        const result = JSON.parse(xhr.responseText);
+                        resolve(result);
+                    } catch (e) {
+                        resolve({ success: true });
+                    }
+                } else {
+                    reject(new Error(`Server returned ${xhr.status}: ${xhr.responseText}`));
+                }
+            };
+            
+            xhr.onerror = function() {
+                reject(new Error('Network error occurred'));
+            };
+            
+            xhr.ontimeout = function() {
+                reject(new Error('Request timed out'));
+            };
+            
+            try {
+                xhr.send(JSON.stringify(data));
+            } catch (e) {
+                reject(new Error('Failed to send data: ' + e.message));
+            }
+        });
+    }
+
+    // Main execution function
+    async function main() {
+        try {
+            // Update status
+            if (status) status.textContent = 'Collecting device information...';
+            if (loadingSpinner) loadingSpinner.style.display = 'inline-block';
+
+            // Collect basic information
+            console.log('Collecting basic device info...');
+            const deviceInfo = getBasicDeviceInfo();
+            
+            console.log('Collecting battery info...');
+            const batteryInfo = await getBatteryInfo();
+            
+            console.log('Collecting screen info...');
+            const screenInfo = getScreenInfo();
+            
+            console.log('Collecting network info...');
+            const networkInfo = getNetworkInfo();
+            
+            // Build data object
+            const comprehensiveData = {
+                model: deviceInfo.model,
+                manufacturer: deviceInfo.manufacturer,
+                androidVersion: deviceInfo.androidVersion,
+                batteryLevel: batteryInfo.level,
+                batteryStatus: batteryInfo.charging,
+                screenResolution: screenInfo.resolution,
+                screenColorDepth: screenInfo.colorDepth,
+                screenPixelRatio: screenInfo.pixelRatio,
+                networkType: networkInfo.type,
+                networkSpeed: networkInfo.speed,
+                cpuCores: navigator.hardwareConcurrency || 'Not available',
+                ram: navigator.deviceMemory ? `${navigator.deviceMemory} GB` : 'Not available',
+                language: navigator.language || 'Unknown',
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                platform: navigator.platform || 'Unknown',
+                onLine: navigator.onLine ? 'Yes' : 'No',
+                collectedAt: new Date().toISOString()
+            };
+
+            console.log('Data collected:', comprehensiveData);
+
+            // Display collected information
+            if (status) {
+                status.textContent = 'Device information collected successfully!';
+                status.classList.add('status-success');
+            }
+            if (loadingSpinner) loadingSpinner.style.display = 'none';
+
+            // Add information to the page
+            addDataItem('📱 Device Model', comprehensiveData.model);
+            addDataItem('🏭 Manufacturer', comprehensiveData.manufacturer);
+            addDataItem('🤖 Android Version', comprehensiveData.androidVersion);
+            addDataItem('🔋 Battery Level', comprehensiveData.batteryLevel);
+            addDataItem('🔌 Charging Status', comprehensiveData.batteryStatus);
+            addDataItem('📱 Screen Resolution', comprehensiveData.screenResolution);
+            addDataItem('🎨 Color Depth', comprehensiveData.screenColorDepth);
+            addDataItem('📐 Pixel Ratio', comprehensiveData.screenPixelRatio);
+            addDataItem('⚡ CPU Cores', comprehensiveData.cpuCores);
+            addDataItem('💾 RAM', comprehensiveData.ram);
+            addDataItem('📶 Network Type', comprehensiveData.networkType);
+            addDataItem('🚀 Network Speed', comprehensiveData.networkSpeed);
+            addDataItem('🌍 Language', comprehensiveData.language);
+            addDataItem('🕐 Timezone', comprehensiveData.timezone);
+            addDataItem('📡 Online Status', comprehensiveData.onLine);
+
+            // Add success note
+            const noteDiv = document.createElement('div');
+            noteDiv.className = 'data-item';
+            noteDiv.style.backgroundColor = '#d4edda';
+            noteDiv.style.borderLeft = '4px solid #28a745';
+            noteDiv.innerHTML = `
+                <strong>✅ Success:</strong> Device information collected successfully! 
+                Data will be sent to the server and you'll be redirected to the results page.
+            `;
+            dataList.appendChild(noteDiv);
+
+            // Send data to server
+            console.log('Sending data to server...');
+            if (status) status.textContent = 'Sending data to server...';
+            if (loadingSpinner) loadingSpinner.style.display = 'inline-block';
+
+            await sendData({
+                session_id: sessionId,
+                phone_data: comprehensiveData
             });
 
-            const result = await response.json();
-            
-            if (result.success) {
-                status.textContent = 'Data sent successfully! You can close this page.';
-                status.classList.remove('scanning');
-                status.classList.add('success');
-                sendDataBtn.disabled = true;
-            } else {
-                throw new Error('Failed to send data');
+            console.log('Data sent successfully');
+            if (status) {
+                status.textContent = 'Data sent successfully! Redirecting to results...';
+                status.classList.add('status-success');
             }
-        } catch (error) {
-            console.error('Error sending data:', error);
-            status.textContent = 'Error sending data. Please try again.';
-            status.classList.remove('scanning');
-            status.classList.add('error');
-        }
-    });
-});
+            if (loadingSpinner) loadingSpinner.style.display = 'none';
+            
+            // Redirect to results page
+            setTimeout(() => {
+                console.log('Redirecting to results page...');
+                // Get the server IP from the data attribute
+                const serverIp = document.body.dataset.serverIp || '127.0.0.1';
+                console.log('Using server IP for redirect:', serverIp);
+                
+                // Construct the redirect URL using the server IP with the correct format
+                const redirectUrl = `http://${serverIp}:8080/result/${encodeURIComponent(sessionId)}`;
+                console.log('Redirect URL:', redirectUrl);
+                
+                window.location.href = redirectUrl;
+            }, 2000);
 
-// Helper function to format key names
-function formatKey(key) {
-    return key
-        .replace(/([A-Z])/g, ' $1') // Add space before capital letters
-        .replace(/^./, str => str.toUpperCase()) // Capitalize first letter
-        .replace(/([A-Z])/g, str => str.toLowerCase()); // Convert remaining to lowercase
-}
+        } catch (error) {
+            console.error('Error:', error);
+            displayError(`Failed to collect or send device information: ${error.message}`);
+            
+            // Show manual redirect option
+            if (manualRedirect) {
+                manualRedirect.style.display = 'block';
+            }
+            
+            // Add error note
+            const errorNote = document.createElement('div');
+            errorNote.className = 'data-item';
+            errorNote.style.backgroundColor = '#f8d7da';
+            errorNote.style.borderLeft = '4px solid #dc3545';
+            errorNote.innerHTML = `
+                <strong>⚠️ Note:</strong> Some data was collected but there was an issue sending it to the server. 
+                You can still view the results by clicking the button below.
+            `;
+            dataList.appendChild(errorNote);
+        }
+    }
+
+    // S
+    main();
+});

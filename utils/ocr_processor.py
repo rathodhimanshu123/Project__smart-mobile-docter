@@ -4,7 +4,7 @@ import re
 import os
 
 # Set Tesseract executable path - update this to your actual installation path
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'  # Verify this path
 
 # Function to extract phone information from image using OCR
 def extract_phone_info(image_path):

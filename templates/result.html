@@ -85,8 +85,37 @@
                         <div id="qrCodeDisplay" style="display: none;">
                             <img id="qrCodeImage" alt="QR Code" style="margin: 20px 0;">
                             <p>Scan this QR code with your phone to provide additional diagnostic information.</p>
+                            <div id="qrLink" style="font-size: 12px; color: #555;"></div>
+                            <div id="simpleTestLink" style="font-size: 12px; color: #666; margin-top: 8px;"></div>
+                            <div id="appHint" style="font-size: 12px; color: #333; margin-top:8px;">
+                                If you have the Android app installed, this link will open the app for full device details. Otherwise it will open in your browser.
+                            </div>
                         </div>
                     </div>
+
+                    {% if phone_info %}
+                    <div class="results-section" style="margin-top: 24px;">
+                        <div class="results-container">
+                            <div class="results-header">
+                                <h2>Mobile Device Details</h2>
+                            </div>
+                            <div class="results-content">
+                                <div class="extracted-info">
+                                    <table>
+                                        <tbody>
+                                        {% for k, v in phone_info.items() %}
+                                            <tr>
+                                                <th>{{ k | replace('_', ' ') | title }}:</th>
+                                                <td>{{ v }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
 
                     <div class="results-footer">
                         <a href="{{ url_for('index') }}" class="back-btn">Diagnose Another Phone</a>
@@ -111,7 +140,8 @@
                 const response = await fetch('/generate_qr');
                 
                 if (!response.ok) {
-                    throw new Error('Failed to generate QR code');
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to generate QR code');
                 }
                 
                 // Get the image blob
@@ -124,13 +154,32 @@
                 
                 qrCodeImage.src = imageUrl;
                 qrCodeDisplay.style.display = 'block';
+
+                // Also fetch and show the exact URL used inside the QR for debugging
+                try {
+                    const debugRes = await fetch('/qr_debug');
+                    const debugData = await debugRes.json();
+                    const qrLink = document.getElementById('qrLink');
+                    const simpleTestLink = document.getElementById('simpleTestLink');
+                    if (debugData.qr_url) {
+                        // Provide an app-deeplink too
+                        const appUrl = `smd://collect?session_id=${encodeURIComponent(debugData.session_id)}&base_url=${encodeURIComponent(debugData.base_url)}`;
+                        qrLink.innerHTML = `Main URL: <a href="${debugData.qr_url}" target="_blank">${debugData.qr_url}</a><br/>Open App: <a href="${appUrl}">${appUrl}</a>`;
+                        
+                        // Show simple test URL
+                        const simpleUrl = debugData.qr_url.replace('/mobile/', '/simple_test/');
+                        simpleTestLink.innerHTML = `Simple Test: <a href="${simpleUrl}" target="_blank">${simpleUrl}</a>`;
+                    }
+                } catch (e) {
+                    console.warn('QR debug fetch failed', e);
+                }
                 
                 // Update button state
                 this.textContent = 'QR Code Generated';
                 
             } catch (error) {
                 console.error('Error:', error);
-                alert('Failed to generate QR code. Please try again.');
+                alert(`QR code generation failed: ${error.message}`);
                 
                 // Reset button state
                 this.disabled = false;

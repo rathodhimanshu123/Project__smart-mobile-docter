@@ -284,10 +284,8 @@
                 handleFile(file);
             });
 
-            // Browse Button
-            browseBtn.addEventListener('click', () => {
-                fileInput.click();
-            });
+            // Browse Button is already handled by the onclick attribute in HTML
+            // No need for additional event listener
 
             fileInput.addEventListener('change', () => {
                 handleFile(fileInput.files[0]);

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mobile View - Smart Mobile Doctor</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', _external=True) }}">
     <style>
         .mobile-section {
             padding: 20px;
@@ -26,6 +26,20 @@
             background: #fff;
             border-radius: 4px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: nowrap;
+        }
+        .data-item strong {
+            margin-right: 10px;
+            flex: 0 0 auto;
+        }
+        .data-item span.value {
+            flex: 1 1 auto;
+            text-align: right;
+            word-break: break-word;
+            max-width: 60%;
         }
         .status-message {
             padding: 10px;
@@ -49,9 +63,30 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            font-weight: 500;
+            transition: background-color 0.3s, transform 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #0069d9;
+        }
     </style>
 </head>
-<body>
+<body data-session-id="{{ session_id }}" data-base-url="{{ base_url }}" data-server-ip="{{ server_ip }}">
     <div class="container">
         <header>
             <h1>Smart Mobile Doctor</h1>
@@ -63,116 +98,35 @@
                 <h2>Session ID: {{ session_id }}</h2>
                 <div class="mobile-content">
                     <div id="status-message" class="status-message">
-                        Collecting device information...
+                        Collecting device information... <span id="loading-spinner" class="loading">⚙️</span>
+                    </div>
+                    <div id="error-display" class="status-message status-error" style="display: none;"></div>
+                    <div id="progress-info" style="font-size: 12px; color: #666; margin-top: 10px; display: none;">
+                        <div id="progress-text">Initializing...</div>
                     </div>
                     <div id="phone-data" class="phone-data">
                         <h3>Device Information</h3>
                         <div id="data-list"></div>
                     </div>
+                    
+                    <!-- Fallback for when JavaScript is disabled or errors occur -->
+                    <noscript>
+                        <div class="status-message status-error">
+                            JavaScript is required for this page to function properly. Please enable JavaScript in your browser settings and reload the page.
+                        </div>
+                    </noscript>
+                    
+                    <!-- Manual redirect option -->
+    <div id="manual-redirect" style="display: none; margin-top: 20px; text-align: center; padding: 15px; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #ddd;">
+        <p style="font-weight: bold; color: #dc3545;">If you are not automatically redirected, please click the button below:</p>
+        <a id="resultLink" href="http://{{ server_ip }}:8080/result/{{ session_id }}" class="btn btn-primary" style="font-size: 1.1em; padding: 12px 24px;">View Diagnosis Results</a>
+        <p style="margin-top: 10px; font-size: 0.9em;">Session ID: {{ session_id }}</p>
+    </div>
                 </div>
             </div>
         </main>
     </div>
 
-    <script>
-    async function collectPhoneData() {
-        const phoneData = {
-            userAgent: navigator.userAgent,
-            platform: navigator.platform,
-            language: navigator.language,
-            screenWidth: window.screen.width,
-            screenHeight: window.screen.height,
-            colorDepth: window.screen.colorDepth,
-            pixelRatio: window.devicePixelRatio,
-            orientation: screen.orientation ? screen.orientation.type : 'unknown',
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            connectionType: navigator.connection ? navigator.connection.effectiveType : 'unknown',
-            deviceMemory: navigator.deviceMemory ? `${navigator.deviceMemory} GB` : 'unknown',
-            processors: navigator.hardwareConcurrency || 'unknown',
-            cookiesEnabled: navigator.cookieEnabled,
-            doNotTrack: navigator.doNotTrack || 'unknown',
-            touchPoints: navigator.maxTouchPoints || 'unknown'
-        };
-
-        // Add battery information if available
-        if ('getBattery' in navigator) {
-            try {
-                const battery = await navigator.getBattery();
-                phoneData.batteryLevel = `${Math.round(battery.level * 100)}%`;
-                phoneData.batteryCharging = battery.charging ? 'Yes' : 'No';
-                phoneData.batteryTime = battery.charging ? 
-                    `${Math.round(battery.chargingTime / 60)} minutes to full` : 
-                    `${Math.round(battery.dischargingTime / 60)} minutes remaining`;
-            } catch (error) {
-                console.log('Battery info not available');
-            }
-        }
-
-        // Add network information if available
-        if (navigator.connection) {
-            const connection = navigator.connection;
-            phoneData.networkType = connection.type || 'unknown';
-            phoneData.networkSpeed = `${connection.downlink} Mbps`;
-            phoneData.networkSaveData = connection.saveData ? 'Yes' : 'No';
-        }
-
-        return phoneData;
-    }
-
-    function displayPhoneData(data) {
-        const dataList = document.getElementById('data-list');
-        dataList.innerHTML = '';
-
-        for (const [key, value] of Object.entries(data)) {
-            const item = document.createElement('div');
-            item.className = 'data-item';
-            item.textContent = `${key.replace(/([A-Z])/g, ' $1').trim()}: ${value}`;
-            dataList.appendChild(item);
-        }
-    }
-
-    async function submitPhoneData(phoneData) {
-        const statusMessage = document.getElementById('status-message');
-        
-        try {
-            const response = await fetch('/api/submit_phone_data', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    session_id: '{{ session_id }}',
-                    phone_data: phoneData
-                })
-            });
-            
-            const result = await response.json();
-            if (result.success) {
-                statusMessage.className = 'status-message status-success';
-                statusMessage.textContent = 'Device information collected and sent successfully!';
-            } else {
-                throw new Error('Failed to submit data');
-            }
-        } catch (error) {
-            statusMessage.className = 'status-message status-error';
-            statusMessage.textContent = 'Error sending device information. Please try refreshing the page.';
-            console.error('Error submitting phone data:', error);
-        }
-    }
-
-    // Initialize when the page loads
-    document.addEventListener('DOMContentLoaded', async () => {
-        const statusMessage = document.getElementById('status-message');
-        try {
-            const phoneData = await collectPhoneData();
-            displayPhoneData(phoneData);
-            await submitPhoneData(phoneData);
-        } catch (error) {
-            statusMessage.className = 'status-message status-error';
-            statusMessage.textContent = 'Error collecting device information. Please try refreshing the page.';
-            console.error('Error:', error);
-        }
-    });
-    </script>
+    <script src="{{ url_for('static', filename='js/mobile.js', _external=True) }}"></script>
 </body>
 </html>
