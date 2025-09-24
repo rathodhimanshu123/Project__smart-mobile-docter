@@ -1,0 +1,189 @@
+<!DOCT    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', _external=True) }}">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile View - Smart Mobile Doctor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile.css') }}">
+    <script src="{{ url_for('static', filename='js/mobile-collector.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/mobile-optimized.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/mobile-actions.js') }}"></script>
+    <style>
+        .mobile-section {
+            padding: 20px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .phone-data {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+        .data-item {
+            margin: 10px 0;
+            padding: 12px;
+            background: #fff;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+        }
+        .data-item strong {
+            margin-bottom: 5px;
+            display: block;
+            color: #555;
+            font-size: 0.95em;
+        }
+        .data-item span.value {
+            display: block;
+            word-break: break-all;
+            overflow-wrap: break-word;
+            font-size: 1.05em;
+            color: #333;
+        }
+        .download-section {
+            padding: 20px;
+            margin-top: 20px;
+            text-align: center;
+            background: #f5f5f5;
+            border-radius: 8px;
+        }
+        
+        .download-btn {
+            display: block;
+            width: 100%;
+            padding: 16px 20px;
+            background-color: #2196F3;
+            color: white;
+            text-decoration: none;
+            border: none;
+            border-radius: 8px;
+            margin: 10px 0;
+            text-align: center;
+            transition: all 0.3s ease;
+            font-weight: bold;
+            font-size: 16px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .download-btn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        
+        .download-btn:not(:disabled):active {
+            background-color: #1976D2;
+            transform: scale(0.98);
+        }
+        
+        .status-success {
+            background-color: #E8F5E9;
+            color: #2E7D32;
+            padding: 12px;
+            border-radius: 6px;
+            margin: 10px 0;
+        }
+        .status-message {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .status-success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .loading {
+            display: inline-block;
+            margin-left: 10px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            font-weight: 500;
+            transition: background-color 0.3s, transform 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #0069d9;
+        }
+    </style>
+</head>
+<body data-session-id="{{ session_id }}" data-base-url="{{ base_url }}" data-server-ip="{{ server_ip }}">
+    <div class="container">
+        <header>
+            <h1>Smart Mobile Doctor</h1>
+            <p>Mobile Diagnostics</p>
+        </header>
+        
+        <main>
+            <div class="mobile-section">
+                <h2>Session ID: {{ session_id }}</h2>
+                <div class="mobile-content">
+                    <div id="status-message" class="status-message">
+                        Collecting device information... <span id="loading-spinner" class="loading">⚙️</span>
+                    </div>
+                    <div id="error-display" class="status-message status-error" style="display: none;"></div>
+                    <div id="progress-info" style="font-size: 12px; color: #666; margin-top: 10px; display: none;">
+                        <div id="progress-text">Initializing...</div>
+                    </div>
+                    <div id="phone-data" class="phone-data">
+                        <h3>Device Information</h3>
+                        <div id="data-list"></div>
+                        <div id="download-section" class="download-section">
+                            <button id="save-log-btn" class="download-btn">
+                                📥 Save Device Information to Log File
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Fallback for when JavaScript is disabled or errors occur -->
+                    <noscript>
+                        <div class="status-message status-error">
+                            JavaScript is required for this page to function properly. Please enable JavaScript in your browser settings and reload the page.
+                        </div>
+                    </noscript>
+                    
+                    <!-- Manual redirect option -->
+    <div id="manual-redirect" style="display: none; margin-top: 20px; text-align: center; padding: 15px; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #ddd;">
+        <p style="font-weight: bold; color: #dc3545;">If you are not automatically redirected, please click the button below:</p>
+        <a id="resultLink" href="http://{{ server_ip }}:8080/result/{{ session_id }}" class="btn btn-primary" style="font-size: 1.1em; padding: 12px 24px;">View Diagnosis Results</a>
+        <p style="margin-top: 10px; font-size: 0.9em;">Session ID: {{ session_id }}</p>
+    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/mobile.js', _external=True) }}"></script>
+</body>
+</html>

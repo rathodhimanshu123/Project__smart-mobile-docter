@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Smart Mobile Doctor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile.css') }}">
+    <script>
+        window.SERVER_CONFIG = {
+            baseUrl: "{{ base_url }}",
+            sessionId: "{{ session_id }}",
+            serverIp: "{{ server_ip }}"
+        };
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">Smart Mobile Doctor</h1>
+            <p class="subtitle">Mobile Diagnostics</p>
+        </div>
+
+        <div class="session-info">
+            Session ID: {{ session_id }}
+        </div>
+
+        <div class="device-info">
+            {% if error %}
+            <div class="error-message">
+                {{ error }}
+            </div>
+            {% endif %}
+
+            {% if success_message %}
+            <div class="success-message">
+                {{ success_message }}
+            </div>
+            {% endif %}
+
+            <div class="info-section">
+                <div class="info-label">Model</div>
+                <div class="info-value" id="model"></div>
+            </div>
+
+            <div class="info-section">
+                <div class="info-label">OS Version</div>
+                <div class="info-value" id="os_version"></div>
+            </div>
+
+            <div class="info-section">
+                <div class="info-label">RAM</div>
+                <div class="info-value" id="ram"></div>
+            </div>
+
+            <div class="info-section">
+                <div class="info-label">Storage</div>
+                <div class="info-value" id="storage"></div>
+            </div>
+
+            <div class="info-section">
+                <div class="info-label">Battery</div>
+                <div class="info-value" id="battery"></div>
+            </div>
+
+            <div class="info-section">
+                <div class="info-label">Network Type</div>
+                <div class="info-value" id="network_type"></div>
+            </div>
+
+            <div class="info-section">
+                <div class="info-label">Network Speed</div>
+                <div class="info-value" id="network_speed"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/mobile-collector.js') }}"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const collector = new MobileDeviceCollector();
+            try {
+                await collector.initialize();
+            } catch (error) {
+                console.error('Failed to initialize device collector:', error);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Device Info</title>
+    <script type="text/javascript">
+        function getQueryParam(name) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(name);
+        }
+
+        async function postToServer(data) {
+            try {
+                const baseUrl = getQueryParam('base_url');
+                const sessionId = getQueryParam('session_id');
+                if (!baseUrl || !sessionId) return;
+                await fetch(baseUrl + '/api/submit_phone_data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId, phone_data: data })
+                });
+                // Redirect to results
+                window.location.href = baseUrl + '/result/' + sessionId;
+            } catch (e) {
+                console.log('Post failed', e);
+            }
+        }
+
+        function getDeviceInfo() {
+            var deviceInfo = JSON.parse(Android.getDeviceInfo());
+
+            // Display the information
+            document.getElementById('model').textContent = deviceInfo.modelName;
+            document.getElementById('manufacturer').textContent = deviceInfo.manufacturer;
+            var availRam = (deviceInfo.availableRamGB != null) ? deviceInfo.availableRamGB.toFixed(1) : 'N/A';
+            var availStorage = (deviceInfo.availableStorageGB != null) ? deviceInfo.availableStorageGB.toFixed(1) : 'N/A';
+            document.getElementById('ram').textContent = deviceInfo.ramSizeGB.toFixed(1) + ' GB (avail ' + availRam + ' GB)';
+            document.getElementById('storage').textContent = deviceInfo.storageSizeGB.toFixed(1) + ' GB (avail ' + availStorage + ' GB)';
+            document.getElementById('android').textContent = deviceInfo.androidVersion;
+            document.getElementById('cores').textContent = deviceInfo.processorCores + ' (' + (deviceInfo.cpuModel || '') + (deviceInfo.cpuMaxFreqMHz ? (', ' + deviceInfo.cpuMaxFreqMHz + ' MHz max') : '') + ')';
+            document.getElementById('battery').textContent = deviceInfo.batteryLevel + '% ' + (deviceInfo.batteryStatus || '');
+            document.getElementById('screen').textContent = (deviceInfo.screenResolution || '') + (deviceInfo.screenSizeInches ? (' ~' + deviceInfo.screenSizeInches.toFixed(1) + '"') : '');
+            document.getElementById('carrier').textContent = (deviceInfo.carrierName || '');
+            document.getElementById('imei').textContent = (deviceInfo.imeiOrAndroidId || '');
+
+            postToServer(deviceInfo);
+        }
+    </script>
+</head>
+<body onload="getDeviceInfo()">
+    <h2>Device Information</h2>
+    <p>Model: <span id="model"></span></p>
+    <p>Manufacturer: <span id="manufacturer"></span></p>
+    <p>RAM: <span id="ram"></span></p>
+    <p>Storage: <span id="storage"></span></p>
+    <p>Android Version: <span id="android"></span></p>
+    <p>Processor: <span id="cores"></span></p>
+    <p>Battery: <span id="battery"></span></p>
+    <p>Screen: <span id="screen"></span></p>
+    <p>Carrier: <span id="carrier"></span></p>
+    <p>Device ID: <span id="imei"></span></p>
+</body>
+</html>

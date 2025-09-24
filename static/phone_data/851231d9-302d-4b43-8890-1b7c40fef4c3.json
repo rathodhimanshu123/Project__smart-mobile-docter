@@ -1,0 +1,30 @@
+{
+  "model": "Android Device",
+  "manufacturer": "Android",
+  "androidVersion": "Not Android",
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.3",
+  "deviceInfo": {
+    "model": "Unknown",
+    "manufacturer": "Unknown",
+    "platform": "Linux armv81",
+    "osVersion": "Unknown"
+  },
+  "memoryInfo": {
+    "deviceMemory": "Unknown",
+    "totalJSHeapSize": "1 GB",
+    "usedJSHeapSize": "10 MB"
+  },
+  "storageInfo": {
+    "status": "Storage information not available"
+  },
+  "networkInfo": {
+    "online": "Yes",
+    "type": "4g",
+    "speed": "0.45 Mbps"
+  },
+  "batteryInfo": {
+    "status": "Battery information not available"
+  },
+  "sessionId": "851231d9-302d-4b43-8890-1b7c40fef4c3",
+  "timestamp": "2025-08-27T13:21:36.469Z"
+}
