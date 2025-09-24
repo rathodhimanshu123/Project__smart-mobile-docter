@@ -118,28 +118,28 @@
             <div class="info-section animate-slide-up" style="animation-delay: 0.5s">
                 <h2>What Information We Analyze</h2>
                 <p style="text-align: center; margin-bottom: 2rem; color: var(--text-secondary); max-width: 600px; margin-left: auto; margin-right: auto;">Our AI analyzes your device screenshot to extract key performance indicators and provide comprehensive diagnostics.</p>
-                <div class="info-grid">
-                    <div class="info-card">
+                <div class="info-grid" id="infoGrid">
+                    <div class="info-card" data-target="model">
                         <i class="fas fa-mobile-alt"></i>
                         <span>Device Model</span>
                     </div>
-                    <div class="info-card">
+                    <div class="info-card" data-target="ram">
                         <i class="fas fa-memory"></i>
                         <span>RAM Capacity</span>
                     </div>
-                    <div class="info-card">
+                    <div class="info-card" data-target="processor">
                         <i class="fas fa-microchip"></i>
                         <span>Processor Info</span>
                     </div>
-                    <div class="info-card">
+                    <div class="info-card" data-target="storage">
                         <i class="fas fa-hdd"></i>
                         <span>Storage Space</span>
                     </div>
-                    <div class="info-card">
+                    <div class="info-card" data-target="battery">
                         <i class="fas fa-battery-three-quarters"></i>
                         <span>Battery Health</span>
                     </div>
-                    <div class="info-card">
+                    <div class="info-card" data-target="os_version">
                         <i class="fas fa-cog"></i>
                         <span>OS Version</span>
                     </div>
@@ -199,6 +199,21 @@
             const themeToggle = document.getElementById('themeToggle');
             const uploadButton = document.getElementById('uploadButton');
             const selectedFileName = document.getElementById('selected-file-name');
+            const infoGrid = document.getElementById('infoGrid');
+            const previewContainer = document.getElementById('previewContainer');
+            const removePreview = document.getElementById('removePreview');
+            const imagePreview = document.getElementById('imagePreview');
+            
+            // Feature toggle: disable dashboard functionality when set to false
+            const featureEnabled = true;
+            if (!featureEnabled) {
+                if (fileInput) fileInput.disabled = true;
+                if (uploadButton) {
+                    uploadButton.disabled = true;
+                    uploadButton.title = 'This feature is currently disabled';
+                }
+                if (dropZone) dropZone.classList.add('disabled');
+            }
 
             // Theme Toggle
             themeToggle.addEventListener('click', () => {
@@ -220,6 +235,15 @@
                         // Show visual feedback
                         dropZone.classList.add('file-selected');
                         showSuccess('File selected successfully');
+                        // Show preview
+                        if (imagePreview && previewContainer) {
+                            const reader = new FileReader();
+                            reader.onload = (e) => {
+                                imagePreview.src = e.target.result;
+                                previewContainer.classList.remove('hidden');
+                            };
+                            reader.readAsDataURL(file);
+                        }
                     } else {
                         fileInput.value = '';
                         selectedFileName.textContent = 'No file chosen';
@@ -230,6 +254,22 @@
                     selectedFileName.textContent = 'No file chosen';
                     uploadButton.disabled = true;
                 }
+            }
+
+            // Make whole drop zone open the file chooser on click/keyboard
+            if (dropZone) {
+                dropZone.addEventListener('click', (e) => {
+                    // Avoid double-submit if clicking inside the inner button
+                    if (e.target && (e.target.closest('.browse-btn') || e.target.tagName === 'INPUT')) return;
+                    fileInput && fileInput.click();
+                });
+                dropZone.tabIndex = 0;
+                dropZone.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        fileInput && fileInput.click();
+                    }
+                });
             }
 
             // Drag and Drop
@@ -258,65 +298,62 @@
             });
 
             // Remove Preview
-            removePreview.addEventListener('click', () => {
-                fileInput.value = '';
-                previewContainer.classList.add('hidden');
-                dropZone.classList.remove('hidden');
+            if (removePreview && previewContainer) {
+                removePreview.addEventListener('click', () => {
+                    fileInput.value = '';
+                    imagePreview && (imagePreview.src = '#');
+                    previewContainer.classList.add('hidden');
+                    dropZone.classList.remove('hidden');
+                    selectedFileName.textContent = 'No file chosen';
+                    uploadButton.disabled = true;
+                });
+            }
+
+            // Support pasting an image from clipboard
+            document.addEventListener('paste', (event) => {
+                const items = event.clipboardData && event.clipboardData.items;
+                if (!items) return;
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    if (item.type && item.type.indexOf('image') !== -1) {
+                        const file = item.getAsFile();
+                        if (file) {
+                            handleFile(file);
+                            // Create a DataTransfer to set fileInput.files
+                            const dt = new DataTransfer();
+                            dt.items.add(file);
+                            fileInput.files = dt.files;
+                        }
+                        break;
+                    }
+                }
             });
 
-            // Form Submit
-            uploadForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
+            // Form Submit - use native submission to let server handle redirect
+            uploadForm.addEventListener('submit', (e) => {
+                if (!featureEnabled) {
+                    e.preventDefault();
+                    showError('This feature is currently disabled.');
+                    return;
+                }
                 const file = fileInput.files[0];
-                
                 if (!file) {
+                    e.preventDefault();
                     showError('Please select a file first');
                     return;
                 }
-
-                try {
-                    // Disable the upload button and show loading state
-                    uploadButton.disabled = true;
-                    uploadButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
-                    uploadProgress.classList.remove('hidden');
-
-                    const formData = new FormData(uploadForm);
-                    
-                    // Start progress animation
-                    let progress = 0;
-                    const interval = setInterval(() => {
-                        progress = Math.min(progress + 5, 90);
-                        progressBar.style.width = `${progress}%`;
-                        progressText.textContent = `Uploading... ${progress}%`;
-                    }, 100);
-
-                    // Submit the form
-                    const response = await fetch(uploadForm.action, {
-                        method: 'POST',
-                        body: formData
-                    });
-
-                    clearInterval(interval);
-
-                    if (response.ok) {
-                        // Complete the progress bar
-                        progressBar.style.width = '100%';
-                        progressText.textContent = 'Upload Complete!';
-                        
-                        // Small delay before redirect to show completion
-                        setTimeout(() => {
-                            uploadForm.submit();
-                        }, 500);
-                    } else {
-                        throw new Error('Upload failed');
-                    }
-                } catch (error) {
-                    clearInterval(interval);
-                    showError('Error uploading file. Please try again.');
-                    uploadButton.disabled = false;
-                    uploadButton.innerHTML = '<i class="fas fa-arrow-up"></i> Upload and Analyze';
-                    uploadProgress.classList.add('hidden');
-                }
+                // Show simple loading state while the browser submits the form
+                uploadButton.disabled = true;
+                uploadButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+                uploadProgress.classList.remove('hidden');
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress = Math.min(progress + 5, 95);
+                    progressBar.style.width = `${progress}%`;
+                    progressText.textContent = `Uploading... ${progress}%`;
+                }, 120);
+                // Allow navigation; clear animation after a while in case of slow network
+                setTimeout(() => clearInterval(interval), 20000);
             });
 
             // Flash Message Handling
@@ -360,6 +397,28 @@
 
             function showSuccess(message) {
                 showMessage(message, 'success');
+            }
+
+            // Make the info cards runnable: clicking any card starts the analysis flow
+            if (infoGrid) {
+                infoGrid.querySelectorAll('.info-card').forEach(card => {
+                    card.tabIndex = 0;
+                    const label = card.querySelector('span')?.textContent || 'this metric';
+                    const promptMsg = `Select your About Phone screenshot to analyze ${label}.`;
+                    const startSelect = () => {
+                        showSuccess(promptMsg);
+                        if (fileInput) fileInput.click();
+                        // focus the upload area
+                        dropZone && dropZone.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    };
+                    card.addEventListener('click', startSelect);
+                    card.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            startSelect();
+                        }
+                    });
+                });
             }
         });
     </script>

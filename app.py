@@ -286,8 +286,8 @@ def upload_file():
             phone_info = extract_phone_info(filepath)
             session_id = str(uuid.uuid4())
             
-            # Get issue and solution
-            issue, solution = predict_issue_and_solution(phone_info)
+            # Get issue, solution and performance score
+            issue, solution, performance_score = predict_issue_and_solution(phone_info)
             
             # Add issue and solution to phone_info
             phone_info['issue'] = issue
@@ -300,6 +300,7 @@ def upload_file():
             session['phone_info'] = phone_info
             session['issue'] = issue
             session['solution'] = solution
+            session['performance_score'] = performance_score
             session['image_path'] = os.path.join('uploads', filename)
             session['qr_session_id'] = session_id
             session['log_file'] = log_filename
@@ -323,6 +324,7 @@ def result(session_id=None):
     phone_info = {}
     issue = ''
     solution = ''
+    performance_score = 85
     image_path = ''
 
     def map_to_predictor_schema(data: dict) -> dict:
@@ -360,7 +362,7 @@ def result(session_id=None):
             mapped = map_to_predictor_schema(phone_info)
             if all(k in mapped for k in ['ram', 'os_version', 'storage', 'battery']):
                 try:
-                    issue, solution = predict_issue_and_solution(mapped)
+                    issue, solution, performance_score = predict_issue_and_solution(mapped)
                 except Exception as e:
                     app.logger.warning(f"Prediction failed for session {session_id}: {e}")
                     issue, solution = 'Diagnosis unavailable', 'Insufficient device parameters to run model.'
@@ -375,6 +377,7 @@ def result(session_id=None):
         phone_info.update({k: v for k, v in raw_data.items() if k not in phone_info})
         issue = session.get('issue', '')
         solution = session.get('solution', '')
+        performance_score = session.get('performance_score', 85)
         image_path = session.get('image_path', '')
 
     return render_template(
@@ -382,6 +385,7 @@ def result(session_id=None):
         phone_info=phone_info,
         issue=issue,
         solution=solution,
+        performance_score=performance_score,
         image_path=image_path
     )
 

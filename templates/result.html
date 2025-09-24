@@ -399,9 +399,18 @@
                         </div>
                             </div>
                     <div style="text-align: center;">
-                        <div style="font-size: var(--text-4xl); font-weight: var(--font-bold); color: var(--success-600); margin-bottom: var(--space-2);">85%</div>
+                        <div style="font-size: var(--text-4xl); font-weight: var(--font-bold); color: var(--success-600); margin-bottom: var(--space-2);">{{ performance_score }}%</div>
+                        {% set perf = performance_score %}
+                        {% if perf >= 85 %}
+                        <div class="status-badge status-success">Excellent</div>
+                        {% elif perf >= 70 %}
                         <div class="status-badge status-success">Good Performance</div>
-                        <p style="margin-top: var(--space-4); font-size: var(--text-sm); color: var(--text-secondary);">Your device is performing well with minor optimization opportunities.</p>
+                        {% elif perf >= 50 %}
+                        <div class="status-badge status-warning">Needs Optimization</div>
+                        {% else %}
+                        <div class="status-badge status-error">Poor Performance</div>
+                        {% endif %}
+                        <p style="margin-top: var(--space-4); font-size: var(--text-sm); color: var(--text-secondary);">Score is computed from RAM, storage, battery capacity and OS version for better alignment with the diagnosis.</p>
                                 </div>
                             </div>
                         </div>
@@ -431,7 +440,8 @@
         {
             "phoneInfo": {{ phone_info | tojson | safe }},
             "issue": {{ issue | tojson | safe }},
-            "solution": {{ solution | tojson | safe }}
+            "solution": {{ solution | tojson | safe }},
+            "performanceScore": {{ performance_score | tojson | safe }}
         }
     </script>
 
@@ -476,7 +486,7 @@
                         issue: templateData.issue,
                         solution: templateData.solution
                     },
-                    performanceScore: "85%"
+                    performanceScore: `${templateData.performanceScore}%`
                 };
                 
                 const dataStr = JSON.stringify(resultsData, null, 2);

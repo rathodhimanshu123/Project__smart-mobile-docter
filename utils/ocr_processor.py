@@ -42,29 +42,66 @@ def extract_phone_info(image_path):
             phone_info['model'] = match.group(1).strip()
             break
     
-    # Extract RAM
-    ram_pattern = r'(\d+)\s*GB\s*RAM'
-    ram_match = re.search(ram_pattern, text, re.IGNORECASE)
-    if ram_match:
-        phone_info['ram'] = f"{ram_match.group(1)}GB"
+    # Extract RAM (handle formats like "8 GB RAM" and "RAM 8.00 GB")
+    ram_patterns = [
+        r'RAM\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*GB',
+        r'(\d+(?:\.\d+)?)\s*GB\s*RAM'
+    ]
+    for pattern in ram_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            value = match.group(1)
+            # Normalize 8.00 -> 8
+            if value.endswith('.00'):
+                value = value[:-3]
+            phone_info['ram'] = f"{value}GB"
+            break
     
-    # Extract OS version
-    android_pattern = r'Android\s*(\d+(?:\.\d+)*)'  # Android version pattern
-    ios_pattern = r'iOS\s*(\d+(?:\.\d+)*)'  # iOS version pattern
-    
-    android_match = re.search(android_pattern, text, re.IGNORECASE)
+    # Extract OS version (handle 'Android 14' and 'Android version 14', also capture Realme UI)
+    android_patterns = [
+        r'Android\s*(?:version\s*)?(\d+(?:\.\d+)*)',
+        r'Android\s*OS\s*(\d+(?:\.\d+)*)'
+    ]
+    ios_pattern = r'iOS\s*(\d+(?:\.\d+)*)'
+    realme_ui_pattern = r'realme\s*UI\s*(\d+(?:\.\d+)*)'
+
+    android_match = None
+    for pattern in android_patterns:
+        android_match = re.search(pattern, text, re.IGNORECASE)
+        if android_match:
+            break
     ios_match = re.search(ios_pattern, text, re.IGNORECASE)
-    
+    realme_match = re.search(realme_ui_pattern, text, re.IGNORECASE)
+
     if android_match:
         phone_info['os_version'] = f"Android {android_match.group(1)}"
     elif ios_match:
         phone_info['os_version'] = f"iOS {ios_match.group(1)}"
+    elif realme_match:
+        phone_info['os_version'] = f"realme UI {realme_match.group(1)}"
     
-    # Extract storage
-    storage_pattern = r'(\d+)\s*GB\s*(?:storage|memory)'
-    storage_match = re.search(storage_pattern, text, re.IGNORECASE)
-    if storage_match:
-        phone_info['storage'] = f"{storage_match.group(1)}GB"
+    # Extract storage (support '124 GB / 128 GB', take total as capacity)
+    storage_patterns = [
+        r'Storage\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*GB\s*/\s*(\d+(?:\.\d+)?)\s*GB',
+        r'(\d+(?:\.\d+)?)\s*GB\s*/\s*(\d+(?:\.\d+)?)\s*GB',
+        r'Storage\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*GB',
+        r'(\d+(?:\.\d+)?)\s*GB\s*(?:storage|memory|ROM)'
+    ]
+    for pattern in storage_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            if match.lastindex and match.lastindex >= 2:
+                # pattern with used/total; choose total (group 2)
+                total = match.group(2)
+                if total.endswith('.00'):
+                    total = total[:-3]
+                phone_info['storage'] = f"{total}GB"
+            else:
+                value = match.group(1)
+                if value.endswith('.00'):
+                    value = value[:-3]
+                phone_info['storage'] = f"{value}GB"
+            break
     
     # Extract processor information
     processor_patterns = [
