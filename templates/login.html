@@ -755,6 +755,7 @@
             const passwordToggle = document.getElementById('passwordToggle');
             const themeToggle = document.getElementById('themeToggle');
             const themeIcon = document.getElementById('themeIcon');
+            const loadingBar = document.getElementById('loadingBar');
             
             // Ensure password field is properly set up
             if (passwordInput) {
@@ -789,91 +790,49 @@
             document.body.setAttribute('data-theme', savedTheme);
             themeIcon.className = savedTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
 
-            // Form submission handling
+            // Helpers for loading bar
+            function showLoading() { if (loadingBar) loadingBar.classList.add('active'); }
+            function hideLoading() { if (loadingBar) loadingBar.classList.remove('active'); }
+
+            function validateForm() {
+                const email = document.getElementById('email').value.trim();
+                const password = document.getElementById('password').value;
+                return !!(email && password);
+            }
+
+            // Form submission handling via fetch to stay on SPA and redirect on success
             if (loginForm) {
-                loginForm.addEventListener('submit', function(e) {
+                loginForm.addEventListener('submit', async function(e) {
+                    e.preventDefault();
                     const email = document.getElementById('email').value.trim();
                     const password = document.getElementById('password').value;
-                    
-                    if (!email || !password) {
-                        e.preventDefault();
-                        return false;
+
+                    if (!validateForm()) {
+                        showNotification('Validation Error', 'Email and password are required', 'error');
+                        return;
+                    }
+
+                    showLoading();
+                    try {
+                        const response = await fetch('{{ url_for('login') }}', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email, password })
+                        });
+                        const data = await response.json();
+                        if (data && data.success) {
+                            window.location.href = data.redirect || '{{ url_for('index') }}';
+                        } else {
+                            showNotification('Login Failed', (data && data.message) || 'Invalid email or password', 'error');
+                        }
+                    } catch (error) {
+                        console.error('Login error:', error);
+                        showNotification('Error', 'An error occurred. Please try again.', 'error');
+                    } finally {
+                        hideLoading();
                     }
                 });
             }
-        });
-            
-            // Initialize any additional features here
-            // For example, social sign-in buttons
-            const googleBtn = document.getElementById('googleSignInBtn');
-            const facebookBtn = document.getElementById('facebookSignInBtn');
-
-            if (googleBtn) {
-                googleBtn.addEventListener('click', function() {
-                    // Implement Google Sign-in
-                    console.log('Google sign-in clicked');
-                });
-            }
-
-            if (facebookBtn) {
-                facebookBtn.addEventListener('click', function() {
-                    // Implement Facebook Sign-in
-                    console.log('Facebook sign-in clicked');
-                });
-            }
-                
-                if (!validateForm()) {
-                    showNotification('Validation Error', 'Please correct the errors in the form', 'error');
-                    return;
-                }
-                
-                showLoading();
-                
-                // Submit form data as JSON
-                const formData = {
-                    email: document.getElementById('email').value.trim(),
-                    password: document.getElementById('password').value
-                };
-                
-                fetch('/login', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(formData)
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        showNotification('Login Successful', 'Welcome back!', 'success');
-                        setTimeout(() => {
-                            window.location.href = data.redirect || '/';
-                        }, 1000);
-                    } else {
-                        showNotification('Login Failed', data.message || 'Invalid email or password', 'error');
-                    }
-                })
-                .catch(error => {
-                    console.error('Login error:', error);
-                    showNotification('Error', 'An error occurred. Please try again.', 'error');
-                })
-                .finally(() => {
-                    hideLoading();
-                });
-            });
-            
-            // Social sign in buttons
-            document.getElementById('googleSignInBtn').addEventListener('click', () => {
-                handleSocialSignIn('google');
-            });
-            
-            document.getElementById('facebookSignInBtn').addEventListener('click', () => {
-                handleSocialSignIn('facebook');
-            });
-            
-            // Real-time validation
-            document.getElementById('email').addEventListener('blur', validateForm);
-            document.getElementById('password').addEventListener('blur', validateForm);
         });
         
         function handleSocialSignIn(provider) {

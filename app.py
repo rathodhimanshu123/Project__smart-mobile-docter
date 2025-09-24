@@ -17,7 +17,8 @@ import sqlite3
 from functools import wraps
 
 app = Flask(__name__)
-app.secret_key = 'smartmobiledoctor'
+# Rotate secret key each start so any previous session cookies become invalid
+app.secret_key = os.urandom(32)
 app.config['DEBUG'] = True
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # Disable caching during development
@@ -100,23 +101,30 @@ def get_base_url() -> str:
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        email = request.form.get('email')
-        password = request.form.get('password')
-        
+        # Support both form-encoded and JSON payloads
+        if request.is_json:
+            data = request.get_json(silent=True) or {}
+            email = data.get('email')
+            password = data.get('password')
+        else:
+            email = request.form.get('email')
+            password = request.form.get('password')
+
         if not email or not password:
             return jsonify({"success": False, "message": "Email and password are required"})
-        
+
         conn = sqlite3.connect('users.db')
         c = conn.cursor()
-        
+
         try:
             c.execute("SELECT * FROM users WHERE email = ?", (email,))
             user = c.fetchone()
-            
+
             if user and check_password_hash(user[3], password):
-                session.clear()  # Clear any existing session
+                session.clear()
                 session['user'] = {'id': user[0], 'name': user[1], 'email': user[2]}
-                session.permanent = True  # Make the session persistent
+                # Require login each new server run and avoid long-lived cookies
+                session.permanent = False
                 return jsonify({"success": True, "redirect": url_for('index')})
             else:
                 return jsonify({"success": False, "message": "Invalid email or password"})
@@ -124,7 +132,7 @@ def login():
             return jsonify({"success": False, "message": str(e)})
         finally:
             conn.close()
-    
+
     return render_template('login.html')
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -489,6 +497,13 @@ def check_phone_data(session_id):
 @app.route('/debug')
 def debug_page():
     return render_template('debug.html')
+
+@app.route('/logout')
+def logout():
+    try:
+        session.clear()
+    finally:
+        return redirect(url_for('login'))
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, debug=True)
