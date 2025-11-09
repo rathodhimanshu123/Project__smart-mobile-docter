@@ -90,8 +90,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Optimized function to send data
     function sendData(data) {
         return new Promise((resolve, reject) => {
-            const serverIp = document.body.dataset.serverIp || '127.0.0.1';
-            const apiUrl = `http://${serverIp}:8080/api/submit_phone_data`;
+            // Use relative path for API calls
+            const apiUrl = '/api/submit_phone_data';
             
             fetch(apiUrl, {
                 method: 'POST',

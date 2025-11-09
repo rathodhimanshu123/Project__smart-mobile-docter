@@ -264,6 +264,164 @@
             cursor: not-allowed;
             transform: none !important;
         }
+        
+        /* Live Battery Widget */
+        .live-battery-widget {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-2);
+            padding: var(--space-2) var(--space-4);
+            background: var(--bg-secondary);
+            border-radius: var(--radius-xl);
+            border: 1px solid var(--border-light);
+            font-size: var(--text-sm);
+        }
+        .battery-icon {
+            font-size: var(--text-lg);
+        }
+        .battery-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .battery-level {
+            font-weight: var(--font-semibold);
+            color: var(--text-primary);
+        }
+        .battery-status {
+            font-size: var(--text-xs);
+            color: var(--text-secondary);
+        }
+        .battery-last-updated {
+            font-size: var(--text-xs);
+            color: var(--text-tertiary);
+        }
+        .battery-live-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #4caf50;
+            border-radius: 50%;
+            margin-left: 6px;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .battery-idle {
+            color: var(--text-tertiary);
+            font-style: italic;
+        }
+        
+        /* State Chips */
+        .state-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-2);
+            padding: var(--space-2) var(--space-4);
+            border-radius: var(--radius-full);
+            font-size: var(--text-sm);
+            font-weight: var(--font-medium);
+        }
+        .state-chip.waiting {
+            background: var(--warning-100);
+            color: var(--warning-700);
+        }
+        .state-chip.snapshot {
+            background: var(--success-100);
+            color: var(--success-700);
+        }
+        .state-chip.live {
+            background: var(--primary-100);
+            color: var(--primary-700);
+        }
+        
+        /* Source Tags */
+        .source-tag {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: var(--radius-sm);
+            font-size: var(--text-xs);
+            font-weight: var(--font-medium);
+            margin-left: var(--space-2);
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+        }
+        .source-tag.web {
+            background: var(--primary-100);
+            color: var(--primary-700);
+        }
+        .source-tag.screenshot {
+            background: var(--success-100);
+            color: var(--success-700);
+        }
+        
+        /* HTTPS Banner */
+        .https-banner {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: var(--radius-lg);
+            padding: var(--space-4);
+            margin: var(--space-4) var(--space-6);
+            font-size: var(--text-sm);
+            color: #856404;
+        }
+        
+        /* Recommendations List */
+        .recommendations-list {
+            list-style: none;
+            padding: 0;
+            margin: var(--space-4) 0 0 0;
+        }
+        .recommendations-list li {
+            padding: var(--space-2) 0;
+            padding-left: var(--space-6);
+            position: relative;
+        }
+        .recommendations-list li:before {
+            content: "•";
+            position: absolute;
+            left: var(--space-2);
+            color: var(--primary-600);
+            font-weight: bold;
+        }
+        
+        /* Toast Notifications */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #323232;
+            color: white;
+            padding: 16px 24px;
+            border-radius: var(--radius-lg);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 1000;
+            display: none;
+            max-width: 90%;
+        }
+        .toast.show {
+            display: block;
+            animation: slideUp 0.3s ease;
+        }
+        .toast.success {
+            background: var(--success-600);
+        }
+        .toast.error {
+            background: var(--error-600);
+        }
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
     </style>
 </head>
 <body class="animate-fade-in">
@@ -274,7 +432,17 @@
                     <i class="fas fa-stethoscope"></i>
                     <span>Smart Mobile Doctor</span>
                 </div>
-                <div class="nav-actions">
+                <div class="nav-actions" style="display: flex; align-items: center; gap: var(--space-4);">
+                    {% if session_id %}
+                    <div id="live-battery-widget" class="live-battery-widget" style="display: none;">
+                        <span class="battery-icon">🔋</span>
+                        <div class="battery-info">
+                            <div class="battery-level" id="battery-level">--%</div>
+                            <div class="battery-status" id="battery-status">--</div>
+                            <div class="battery-last-updated" id="battery-last-updated"></div>
+                        </div>
+                    </div>
+                    {% endif %}
                     <a href="{{ url_for('index') }}" class="btn btn-secondary">
                         <i class="fas fa-home"></i>
                         Home
@@ -283,11 +451,24 @@
             </div>
         </nav>
         
+        {% if not is_https %}
+        <div class="https-banner">
+            ⚠️ <strong>Limited Data Available:</strong> This page is not using HTTPS. Some browser APIs require a secure context. For full functionality, please use HTTPS.
+        </div>
+        {% endif %}
+        
         <div class="results-hero">
             <div class="results-hero-content">
                 <h1><i class="fas fa-check-circle"></i> Analysis Complete</h1>
                 <p>Your device has been successfully analyzed using our advanced AI diagnostics system.</p>
-                <div class="status-badge status-success">Diagnosis Ready</div>
+                {% if session_id %}
+                <div style="display: flex; gap: var(--space-3); align-items: center; justify-content: center; flex-wrap: wrap; margin-top: var(--space-4);">
+                    <div id="state-chip" class="state-chip waiting">
+                        <i class="fas fa-clock"></i>
+                        <span>Waiting for phone</span>
+                    </div>
+                </div>
+                {% endif %}
             </div>
                     </div>
                     
@@ -322,16 +503,46 @@
                     </div>
                     <div style="overflow-x: auto;">
                         <table class="data-table">
-                            <tbody>
-                            {% for k, v in phone_info.items() %}
-                                <tr>
-                                    <th>{{ k | replace('_', ' ') | title }}</th>
-                                    <td><strong>{{ v }}</strong></td>
+                            <tbody id="device-info-table">
+                            {% if merged_data %}
+                                {% for k, v in merged_data.items() %}
+                                    {% if k not in ['timestamp', 'source'] %}
+                                    <tr>
+                                        <th>{{ k | replace('_', ' ') | title }}</th>
+                                        <td>
+                                            <strong>
+                                                {% if v is mapping and 'value' in v %}
+                                                    {{ v.value if v.value is not none else 'Not exposed by browser' }}
+                                                    {% if v.source %}
+                                                    <span class="source-tag {{ v.source }}">{{ v.source }}</span>
+                                                    {% endif %}
+                                                {% else %}
+                                                    {{ v if v is not none else 'Not exposed by browser' }}
+                                                {% endif %}
+                                            </strong>
+                                        </td>
                                     </tr>
-                            {% endfor %}
+                                    {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                {% for k, v in phone_info.items() %}
+                                    <tr>
+                                        <th>{{ k | replace('_', ' ') | title }}</th>
+                                        <td><strong>{{ v }}</strong></td>
+                                    </tr>
+                                {% endfor %}
+                            {% endif %}
                             </tbody>
-                                </table>
+                        </table>
+                        {% if merged_data and merged_data.get('storage') %}
+                            {% set storage_val = merged_data.storage.get('value') if merged_data.storage is mapping else merged_data.storage %}
+                            {% if storage_val is mapping and storage_val.get('storageSource') == 'browser sandbox' %}
+                            <div id="storage-note-static" style="margin-top: var(--space-4); padding: var(--space-3); background: #e3f2fd; border-left: 4px solid #1976d2; border-radius: 4px; font-size: var(--text-sm); color: #1565c0;">
+                                <strong>ℹ️ Note:</strong> This shows browser sandbox storage, not full device memory.
                             </div>
+                            {% endif %}
+                        {% endif %}
+                    </div>
                         </div>
                         
                 <div class="result-card animate-slide-up" style="animation-delay: 0.2s">
@@ -399,18 +610,30 @@
                         </div>
                             </div>
                     <div style="text-align: center;">
-                        <div style="font-size: var(--text-4xl); font-weight: var(--font-bold); color: var(--success-600); margin-bottom: var(--space-2);">{{ performance_score }}%</div>
-                        {% set perf = performance_score %}
-                        {% if perf >= 85 %}
-                        <div class="status-badge status-success">Excellent</div>
-                        {% elif perf >= 70 %}
-                        <div class="status-badge status-success">Good Performance</div>
-                        {% elif perf >= 50 %}
-                        <div class="status-badge status-warning">Needs Optimization</div>
-                        {% else %}
-                        <div class="status-badge status-error">Poor Performance</div>
+                        <div style="font-size: var(--text-4xl); font-weight: var(--font-bold); color: var(--success-600); margin-bottom: var(--space-2);" id="performance-score-value">{{ performance_score }}%</div>
+                        <div class="status-badge status-success" id="performance-label">
+                            {% if performance_label %}{{ performance_label }}{% else %}
+                                {% if performance_score >= 85 %}Excellent
+                                {% elif performance_score >= 70 %}Good
+                                {% elif performance_score >= 50 %}Fair
+                                {% else %}Poor{% endif %}
                         {% endif %}
-                        <p style="margin-top: var(--space-4); font-size: var(--text-sm); color: var(--text-secondary);">Score is computed from RAM, storage, battery capacity and OS version for better alignment with the diagnosis.</p>
+                                </div>
+                        <p style="margin-top: var(--space-4); font-size: var(--text-sm); color: var(--text-secondary);">Score computed from RAM (30%), Storage (30%), Battery (20%), and OS recency (20%).</p>
+                        <div style="margin-top: var(--space-4); padding: var(--space-3); background: #e3f2fd; border-left: 4px solid #1976d2; border-radius: 4px; font-size: var(--text-sm); color: #1565c0;">
+                            <strong>ℹ️ Note:</strong> Browsers do not expose true battery health (mAh/wear). We show live battery level + charging status on the web. 
+                            Full battery health would require a future add-on via a tiny Android native collector that posts to the same session.
+                            </div>
+                        {% if recommendations %}
+                        <div style="margin-top: var(--space-6); text-align: left;">
+                            <h4 style="margin-bottom: var(--space-3); font-size: var(--text-base);">Recommendations:</h4>
+                            <ul class="recommendations-list">
+                                {% for rec in recommendations %}
+                                <li>{{ rec }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
                                 </div>
                             </div>
                         </div>
@@ -426,10 +649,23 @@
                     <i class="fas fa-print"></i>
                     Print Results
                 </button>
+                {% if session_id %}
+                <button class="btn btn-secondary" onclick="recheckData()" id="recheck-btn">
+                    <i class="fas fa-sync-alt"></i>
+                    Recheck Data
+                </button>
+                {% endif %}
+                {% if session_id %}
+                <a href="/api/download-report/{{ session_id }}" class="btn btn-secondary" download>
+                    <i class="fas fa-download"></i>
+                    Download Report (PDF)
+                </a>
+                {% else %}
                 <button class="btn btn-secondary" onclick="downloadResults()">
                     <i class="fas fa-download"></i>
                     Download Report
                 </button>
+                {% endif %}
                     </div>
                 </div>
             </div>
@@ -445,13 +681,454 @@
         }
     </script>
 
+    <div id="toast" class="toast"></div>
+
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Get template data
-            const templateData = JSON.parse(document.getElementById('template-data').textContent);
+        // Get sessionId from page (should be set by server)
+        const sessionId = '{{ session_id }}' || null;
+        let eventSource = null;
+        let currentSnapshot = null;
+        let currentLive = null;
+        const isSecure = window.location.protocol === 'https:';
+        let hasReceivedSnapshot = false;
+        let lastBatteryUpdateTime = null;
+        let batteryIdleTimer = null;
+        
+        console.log('[DASHBOARD] SessionId:', sessionId);
+
+        // Toast notification
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast show ${type}`;
+            setTimeout(() => {
+                toast.className = 'toast';
+            }, 3000);
+        }
+
+        // Update state chip
+        function updateStateChip(state) {
+            const chip = document.getElementById('state-chip');
+            if (!chip) return;
+            
+            chip.className = `state-chip ${state}`;
+            if (state === 'waiting') {
+                chip.innerHTML = '<i class="fas fa-clock"></i><span>Waiting for phone</span>';
+            } else if (state === 'snapshot') {
+                chip.innerHTML = '<i class="fas fa-check-circle"></i><span>Snapshot received</span>';
+            } else if (state === 'live') {
+                chip.innerHTML = '<i class="fas fa-sync-alt fa-spin"></i><span>Live updating…</span>';
+            }
+        }
+
+        // Format time as hh:mm:ss
+        function formatTime(date) {
+            return date.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+
+        // Update battery widget with exact format
+        function updateBatteryWidget(batteryData, isLive = false) {
+            const widget = document.getElementById('live-battery-widget');
+            if (!widget) return;
+
+            let level = null;
+            let charging = false;
+
+            if (batteryData) {
+                if (batteryData.level !== undefined) {
+                    level = batteryData.level;
+                    charging = batteryData.charging || false;
+                } else if (batteryData.battery && batteryData.battery.level !== undefined) {
+                    level = batteryData.battery.level;
+                    charging = batteryData.battery.charging || false;
+                }
+            }
+
+            if (level !== null && level !== undefined) {
+                // Update level with exact integer format
+                document.getElementById('battery-level').textContent = `${level}%`;
+                
+                // Update status with exact format and LIVE dot
+                const statusEl = document.getElementById('battery-status');
+                const statusText = charging ? 'Charging' : 'Not charging';
+                statusEl.innerHTML = statusText + (isLive ? '<span class="battery-live-dot"></span>' : '');
+                
+                // Update last updated time
+                const now = new Date();
+                lastBatteryUpdateTime = now;
+                document.getElementById('battery-last-updated').textContent = `Last updated ${formatTime(now)}`;
+                document.getElementById('battery-last-updated').className = 'battery-last-updated';
+                
+                widget.style.display = 'inline-flex';
+                
+                // Clear idle timer and set new one
+                if (batteryIdleTimer) {
+                    clearTimeout(batteryIdleTimer);
+                }
+                batteryIdleTimer = setTimeout(() => {
+                    showBatteryIdle();
+                }, 60000); // 60 seconds
+                
+                // Recompute performance score on battery event
+                if (currentSnapshot && isLive) {
+                    currentSnapshot.battery = { level: level, charging: charging };
+                    recomputePerformanceScore(currentSnapshot);
+                }
+            }
+        }
+
+        // Show battery idle state
+        function showBatteryIdle() {
+            const statusEl = document.getElementById('battery-status');
+            const lastUpdatedEl = document.getElementById('battery-last-updated');
+            if (statusEl && lastUpdatedEl) {
+                statusEl.innerHTML = '<span class="battery-idle">Phone idle/disconnected</span>';
+                lastUpdatedEl.textContent = lastBatteryUpdateTime ? `Last updated ${formatTime(lastBatteryUpdateTime)}` : 'No updates';
+                lastUpdatedEl.className = 'battery-last-updated battery-idle';
+            }
+        }
+
+        // Recompute performance score (client-side version matching server logic)
+        function recomputePerformanceScore(data) {
+            function parseNumeric(text, defaultVal = 0) {
+                if (!text || text === 'Unknown') return defaultVal;
+                if (typeof text === 'number') return text;
+                const match = String(text).match(/(\d+(?:\.\d+)?)/);
+                return match ? parseFloat(match[1]) : defaultVal;
+            }
+
+            function clamp(v, lo, hi) {
+                return Math.max(lo, Math.min(hi, v));
+            }
+
+            // RAM
+            let ram_gb = 0;
+            if (data.deviceMemory) ram_gb = parseNumeric(data.deviceMemory);
+            else if (data.ram) ram_gb = parseNumeric(data.ram);
+            else if (data.ramSizeGB) ram_gb = parseNumeric(data.ramSizeGB);
+
+            let ram_score = 0;
+            if (ram_gb <= 2) ram_score = clamp((ram_gb / 2.0) * 30, 0, 30);
+            else if (ram_gb <= 4) ram_score = 30 + ((ram_gb - 2) / 2.0) * 20;
+            else if (ram_gb <= 6) ram_score = 50 + ((ram_gb - 4) / 2.0) * 20;
+            else if (ram_gb <= 8) ram_score = 70 + ((ram_gb - 6) / 2.0) * 15;
+            else ram_score = 85 + clamp(((ram_gb - 8) / 4.0) * 15, 0, 15);
+            ram_score = clamp(ram_score, 0, 100);
+
+            // Storage - use sandbox format if available, otherwise fallback to quota/usage
+            let storage_score = 50;
+            if (data.storage && typeof data.storage === 'object') {
+                let free_pct = 0;
+                // Use new sandbox format if available
+                if (data.storage.storageSandboxQuotaMB !== undefined && data.storage.storageSandboxUsedMB !== undefined) {
+                    const quotaMB = data.storage.storageSandboxQuotaMB;
+                    const usedMB = data.storage.storageSandboxUsedMB;
+                    if (quotaMB > 0) {
+                        free_pct = ((quotaMB - usedMB) / quotaMB) * 100;
+                    }
+                } else if (data.storage.quota) {
+                    // Fallback to old format
+                    const quota = data.storage.quota;
+                    const usage = data.storage.usage || 0;
+                    if (quota > 0) {
+                        free_pct = ((quota - usage) / quota) * 100;
+                    }
+                }
+                
+                if (free_pct > 0) {
+                    if (free_pct < 20) storage_score = (free_pct / 20.0) * 40;
+                    else if (free_pct < 40) storage_score = 40 + ((free_pct - 20) / 20.0) * 30;
+                    else if (free_pct < 60) storage_score = 70 + ((free_pct - 40) / 20.0) * 20;
+                    else storage_score = 90 + clamp(((free_pct - 60) / 40.0) * 10, 0, 10);
+                }
+            }
+            storage_score = clamp(storage_score, 0, 100);
+
+            // Battery
+            let battery_score = 50;
+            if (data.battery && data.battery.level !== undefined) {
+                battery_score = parseFloat(data.battery.level);
+                if (data.battery.charging) {
+                    battery_score = Math.min(100, battery_score + 5);
+                }
+            }
+            battery_score = clamp(battery_score, 0, 100);
+
+            // OS
+            let os_score = 50;
+            const os_version = data.os_version || data.androidVersion || data.platform;
+            if (os_version) {
+                const version_num = parseNumeric(os_version);
+                if (version_num > 0) {
+                    if (String(os_version).toLowerCase().includes('android') || version_num < 20) {
+                        os_score = clamp(((version_num - 8) / 6.0) * 100, 0, 100);
+                    } else {
+                        os_score = clamp(((version_num - 12) / 5.0) * 100, 0, 100);
+                    }
+                }
+            }
+            os_score = clamp(os_score, 0, 100);
+
+            // Weighted average
+            const performance_score = Math.round(
+                0.30 * ram_score +
+                0.30 * storage_score +
+                0.20 * battery_score +
+                0.20 * os_score
+            );
+
+            // Update UI
+            const scoreEl = document.getElementById('performance-score-value');
+            const labelEl = document.getElementById('performance-label');
+            if (scoreEl) {
+                scoreEl.textContent = `${clamp(performance_score, 0, 100)}%`;
+            }
+            if (labelEl) {
+                let label = 'Unknown';
+                if (performance_score >= 85) label = 'Excellent';
+                else if (performance_score >= 70) label = 'Good';
+                else if (performance_score >= 50) label = 'Fair';
+                else label = 'Poor';
+                labelEl.textContent = label;
+            }
+
+            console.log('[DASHBOARD] Performance score recomputed:', performance_score);
+        }
+
+        // Update device info table
+        function updateDeviceInfoTable(snapshot) {
+            const tbody = document.getElementById('device-info-table');
+            if (!tbody || !snapshot) return;
+
+            // Clear existing rows
+            tbody.innerHTML = '';
+
+            const fields = [
+                { key: 'manufacturer', label: 'Manufacturer' },
+                { key: 'model', label: 'Model' },
+                { key: 'platform', label: 'Platform' },
+                { key: 'deviceMemory', label: 'RAM', format: (v) => {
+                    if (!v) return null;
+                    return `~${v} GB (browser approx)`;
+                }},
+                { key: 'hardwareConcurrency', label: 'CPU Threads' },
+                { key: 'screenWidth', label: 'Screen Width', format: (v) => v ? `${v}px` : null },
+                { key: 'screenHeight', label: 'Screen Height', format: (v) => v ? `${v}px` : null },
+                { key: 'pixelRatio', label: 'Pixel Ratio' },
+                { key: 'battery', label: 'Battery', format: (v) => {
+                    if (!v || v.level === undefined) return null;
+                    // Exact format: "19% (Charging|Not charging)"
+                    return `${v.level}%${v.charging ? ' (Charging)' : ' (Not charging)'}`;
+                }},
+                { key: 'storage', label: 'Storage', format: (v) => {
+                    if (!v) return null;
+                    // Use new sandbox format if available
+                    if (v.storageSandboxQuotaMB !== undefined && v.storageSandboxUsedMB !== undefined) {
+                        return `Browser Sandbox: ${v.storageSandboxUsedMB} MB used of ${v.storageSandboxQuotaMB} MB (${v.storageSandboxUsagePercent}%)`;
+                    }
+                    // Fallback to old format
+                    if (v.quota) {
+                        const free = v.quota - v.usage;
+                        const freeGB = (free / (1024 * 1024 * 1024)).toFixed(2);
+                        const totalGB = (v.quota / (1024 * 1024 * 1024)).toFixed(2);
+                        return `${freeGB} GB free of ${totalGB} GB`;
+                    }
+                    return null;
+                }},
+                { key: 'network', label: 'Network', format: (v) => {
+                    if (!v || !v.effectiveType) return null;
+                    return `${v.effectiveType}${v.downlink ? ` (${v.downlink} Mbps)` : ''}`;
+                }},
+                { key: 'gpu', label: 'GPU', format: (v) => {
+                    if (!v || !v.vendor) return null;
+                    return `${v.vendor} - ${v.renderer}`;
+                }}
+            ];
+
+            fields.forEach(field => {
+                let value = snapshot[field.key];
+                let displayValue = '';
+                let source = snapshot.source || 'web';
+
+                // Use format function if available
+                if (field.format) {
+                    displayValue = field.format(value);
+                } else if (value === null || value === undefined || value === '') {
+                    displayValue = null;
+                } else if (typeof value === 'object') {
+                    displayValue = JSON.stringify(value);
+                } else {
+                    displayValue = String(value);
+                }
+
+                // Get reason if value is missing
+                let reason = null;
+                if (displayValue === null || displayValue === '') {
+                    if (field.key === 'battery') {
+                        if (!isSecure) {
+                            reason = 'Insecure context (enable HTTPS)';
+                        } else {
+                            reason = 'Not supported on this browser (use Android Chrome over HTTPS)';
+                        }
+                    } else {
+                        reason = isSecure ? 'Not exposed by browser' : 'Insecure context (enable HTTPS)';
+                    }
+                }
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <th>${field.label}</th>
+                    <td>
+                        <strong>${displayValue || reason || 'Storage info not available'}</strong>
+                        ${source ? `<span class="source-tag ${source}">${source}</span>` : ''}
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+
+            // Show/hide storage note based on data
+            const tableContainer = tbody.closest('div');
+            let storageNote = document.getElementById('storage-note-dynamic');
+            if (snapshot.storage && snapshot.storage.storageSource === 'browser sandbox') {
+                if (!storageNote && tableContainer) {
+                    storageNote = document.createElement('div');
+                    storageNote.id = 'storage-note-dynamic';
+                    storageNote.style.cssText = 'margin-top: var(--space-4); padding: var(--space-3); background: #e3f2fd; border-left: 4px solid #1976d2; border-radius: 4px; font-size: var(--text-sm); color: #1565c0;';
+                    storageNote.innerHTML = '<strong>ℹ️ Note:</strong> This shows browser sandbox storage, not full device memory.';
+                    tableContainer.appendChild(storageNote);
+                }
+            } else if (storageNote) {
+                storageNote.remove();
+            }
+        }
+
+        function formatBytes(bytes) {
+            if (!bytes || bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        // Load initial snapshot from API
+        async function loadSnapshot() {
+            if (!sessionId) {
+                console.warn('[DASHBOARD] No sessionId, skipping load');
+                return;
+            }
+
+            try {
+                console.log('[DASHBOARD] Loading snapshot for sessionId:', sessionId);
+                const response = await fetch(`/api/session/${sessionId}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    if (data.snapshot) {
+                        currentSnapshot = data.snapshot;
+                        updateDeviceInfoTable(data.snapshot);
+                        updateBatteryWidget(data.snapshot, false);
+                        updateStateChip('snapshot');
+                        hasReceivedSnapshot = true;
+                        recomputePerformanceScore(data.snapshot);
+                        console.log('[DASHBOARD] Snapshot loaded:', data.snapshot);
+                    }
+                    if (data.live) {
+                        currentLive = data.live;
+                        updateBatteryWidget(data.live, true);
+                        // Update snapshot battery if we have snapshot
+                        if (currentSnapshot) {
+                            currentSnapshot.battery = {
+                                level: data.live.level,
+                                charging: data.live.charging
+                            };
+                            recomputePerformanceScore(currentSnapshot);
+                        }
+                        console.log('[DASHBOARD] Live data loaded:', data.live);
+                    }
+                    if (!data.snapshot && !data.live) {
+                        updateStateChip('waiting');
+                    }
+                } else {
+                    updateStateChip('waiting');
+                }
+            } catch (error) {
+                console.error('[DASHBOARD] Error loading snapshot:', error);
+                updateStateChip('waiting');
+            }
+        }
+
+        // Subscribe to SSE stream
+        function subscribeToStream() {
+            if (!sessionId) {
+                console.warn('[DASHBOARD] No sessionId, skipping SSE subscription');
+                return;
+            }
+
+            // Close existing connection if any
+            if (eventSource) {
+                eventSource.close();
+            }
+
+            const streamUrl = `/api/stream/${sessionId}`;
+            console.log('[DASHBOARD] Opening SSE stream:', streamUrl);
+            eventSource = new EventSource(streamUrl);
+
+            eventSource.onopen = function() {
+                console.log('[DASHBOARD] SSE connection opened');
+            };
+
+            eventSource.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log('[DASHBOARD] SSE message received:', data.type);
+                    
+                    if (data.type === 'connected') {
+                        console.log('[DASHBOARD] SSE connected for session:', data.sessionId);
+                    } else if (data.type === 'snapshot' && data.data) {
+                        // Snapshot update
+                        currentSnapshot = data.data;
+                        updateDeviceInfoTable(currentSnapshot);
+                        updateBatteryWidget(currentSnapshot, false);
+                        recomputePerformanceScore(currentSnapshot);
+                        if (!hasReceivedSnapshot) {
+                            updateStateChip('snapshot');
+                            hasReceivedSnapshot = true;
+                            showToast('Device data received', 'success');
+                        }
+                    } else if (data.type === 'battery' && data.data) {
+                        // Live battery update
+                        currentLive = data.data;
+                        updateBatteryWidget(data.data, true);
+                        updateStateChip('live');
+                        // Update battery in snapshot if it exists for performance score
+                        if (currentSnapshot) {
+                            currentSnapshot.battery = {
+                                level: data.data.level,
+                                charging: data.data.charging
+                            };
+                            recomputePerformanceScore(currentSnapshot);
+                        }
+                    }
+                } catch (error) {
+                    console.error('[DASHBOARD] Error parsing SSE message:', error);
+                }
+            };
+
+            eventSource.onerror = function(error) {
+                console.error('[DASHBOARD] SSE error:', error);
+                if (eventSource.readyState === EventSource.CLOSED) {
+                    console.log('[DASHBOARD] SSE closed, will reconnect in 3s');
+                    // Reconnect after 3 seconds
+                    setTimeout(subscribeToStream, 3000);
+                }
+            };
+        }
             
             // QR Code Generation
-        document.getElementById('generateQRBtn').addEventListener('click', async function() {
+        document.addEventListener('DOMContentLoaded', function() {
+            const generateQRBtn = document.getElementById('generateQRBtn');
+            if (generateQRBtn) {
+                generateQRBtn.addEventListener('click', async function() {
             try {
                 this.disabled = true;
                     this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
@@ -467,18 +1144,41 @@
                     
                     this.innerHTML = '<i class="fas fa-check"></i> QR Code Generated';
                     this.disabled = false;
+                        showToast('QR code generated successfully', 'success');
                 } catch (error) {
                     console.error('QR generation error:', error);
                     this.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Generation Failed';
                     this.disabled = false;
-                    
-                    // Show error message
-                    showNotification('QR Code Generation Failed', error.message, 'error');
+                        showToast('QR code generation failed', 'error');
+                    }
+                });
+            }
+
+            // Load snapshot and subscribe to stream if session ID exists
+            if (sessionId) {
+                loadSnapshot().then(() => {
+                    subscribeToStream();
+                });
+            }
+
+            // Recheck Data function
+            window.recheckData = async function() {
+                const btn = document.getElementById('recheck-btn');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Rechecking...';
                 }
-            });
+                await loadSnapshot();
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-sync-alt"></i> Recheck Data';
+                }
+                showToast('Data refreshed', 'success');
+            };
             
             // Make downloadResults globally available
             window.downloadResults = function() {
+                const templateData = JSON.parse(document.getElementById('template-data').textContent);
                 const resultsData = {
                     timestamp: new Date().toISOString(),
                     deviceInfo: templateData.phoneInfo,
@@ -503,39 +1203,12 @@
             };
         });
         
-        // Notification System
-        function showNotification(title, message, type = 'info') {
-            const notification = document.createElement('div');
-            notification.className = `flash-message ${type} animate-fade-in`;
-            
-            let iconClass = 'info-circle';
-            if (type === 'success') iconClass = 'check-circle';
-            if (type === 'error') iconClass = 'exclamation-circle';
-            if (type === 'warning') iconClass = 'exclamation-triangle';
-            
-            notification.innerHTML = `
-                <i class="fas fa-${iconClass}"></i>
-                <span><strong>${title}:</strong> ${message}</span>
-                <button class="close-flash" onclick="this.parentElement.remove()">×</button>
-            `;
-            
-            // Create container if it doesn't exist
-            let container = document.querySelector('.flash-messages');
-            if (!container) {
-                container = document.createElement('div');
-                container.className = 'flash-messages';
-                document.body.appendChild(container);
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            if (eventSource) {
+                eventSource.close();
             }
-            
-            container.appendChild(notification);
-            
-            // Auto-remove after 5 seconds
-            setTimeout(() => {
-                if (notification.parentElement) {
-                    notification.remove();
-                }
-            }, 5000);
-        }
+        });
     </script>
 </body>
 </html>

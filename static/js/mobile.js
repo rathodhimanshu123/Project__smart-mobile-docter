@@ -151,55 +151,41 @@ document.addEventListener('DOMContentLoaded', function() {
     // Function to send data with optimization
     function sendData(data) {
         return new Promise((resolve, reject) => {
-            const serverIp = document.body.dataset.serverIp || '127.0.0.1';
-            const apiUrl = `http://${serverIp}:8080/api/submit_phone_data`;
+            // Use relative path for API calls
+            const apiUrl = '/api/submit_phone_data';
             
-            // Use fetch API instead of XMLHttpRequest for better performance
+            // Use fetch API for better performance
             fetch(apiUrl, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json'
                 },
-                body: JSON.stringify(data),
-                signal: AbortSignal.timeout(5000) // 5 second timeout
-            
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    try {
-                        const result = JSON.parse(xhr.responseText);
-                        if (result.log_file) {
-                            const downloadBtn = document.createElement('a');
-                            downloadBtn.href = `/download_log/${result.log_file}`;
-                            downloadBtn.className = 'download-btn';
-                            downloadBtn.innerHTML = '📥 Download Device Analysis Log';
-                            const phoneData = document.getElementById('phone-data');
-                            if (phoneData) {
-                                phoneData.appendChild(downloadBtn);
-                            }
-                        }
-                        resolve(result);
-                    } catch (e) {
-                        resolve({ success: true });
-                    }
+                body: JSON.stringify(data)
+            })
+            .then(response => {
+                if (response.ok) {
+                    return response.json();
                 } else {
-                    reject(new Error(`Server returned ${xhr.status}: ${xhr.responseText}`));
+                    throw new Error(`Server returned ${response.status}`);
                 }
-            };
-            
-            xhr.onerror = function() {
-                reject(new Error('Network error occurred'));
-            };
-            
-            xhr.ontimeout = function() {
-                reject(new Error('Request timed out'));
-            };
-            
-            try {
-                xhr.send(JSON.stringify(data));
-            } catch (e) {
-                reject(new Error('Failed to send data: ' + e.message));
-            }
+            })
+            .then(result => {
+                if (result.log_file) {
+                    const downloadBtn = document.createElement('a');
+                    downloadBtn.href = `/download_log/${result.log_file}`;
+                    downloadBtn.className = 'download-btn';
+                    downloadBtn.innerHTML = '📥 Download Device Analysis Log';
+                    const phoneData = document.getElementById('phone-data');
+                    if (phoneData) {
+                        phoneData.appendChild(downloadBtn);
+                    }
+                }
+                resolve(result);
+            })
+            .catch(error => {
+                reject(new Error('Failed to send data: ' + error.message));
+            });
         });
     }
 
@@ -308,12 +294,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // Redirect to results page
             setTimeout(() => {
                 console.log('Redirecting to results page...');
-                // Get the server IP from the data attribute
-                const serverIp = document.body.dataset.serverIp || '127.0.0.1';
-                console.log('Using server IP for redirect:', serverIp);
-                
-                // Construct the redirect URL using the server IP with the correct format
-                const redirectUrl = `http://${serverIp}:8080/result/${encodeURIComponent(sessionId)}`;
+                // Use relative path for redirect
+                const redirectUrl = `/result/${encodeURIComponent(sessionId)}`;
                 console.log('Redirect URL:', redirectUrl);
                 
                 window.location.href = redirectUrl;

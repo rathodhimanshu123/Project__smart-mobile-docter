@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Collector - Smart Mobile Doctor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile.css') }}">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .header h1 {
+            margin: 0 0 8px 0;
+            color: #1a1a1a;
+        }
+        .header p {
+            color: #666;
+            margin: 0;
+        }
+        .https-banner {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #856404;
+            position: relative;
+        }
+        .https-banner.dismissed {
+            display: none;
+        }
+        .https-banner .close-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #856404;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .https-banner .close-btn:hover {
+            opacity: 0.7;
+        }
+        .ios-banner {
+            background: #d1ecf1;
+            border: 1px solid #0c5460;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #0c5460;
+        }
+        .start-scan-section {
+            text-align: center;
+            margin: 32px 0;
+        }
+        .start-scan-btn {
+            background: linear-gradient(135deg, #1976d2, #1565c0);
+            color: white;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+        .start-scan-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+        .start-scan-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 500;
+            display: none;
+        }
+        .status.show {
+            display: block;
+        }
+        .status.collecting {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        .status.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+        }
+        .data-item {
+            margin: 12px 0;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .data-item strong {
+            color: #333;
+            flex: 1;
+            min-width: 120px;
+        }
+        .data-item span {
+            color: #666;
+            text-align: right;
+            word-break: break-word;
+            flex: 1;
+        }
+        .reason {
+            font-size: 12px;
+            color: #999;
+            font-style: italic;
+            width: 100%;
+            margin-top: 4px;
+        }
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #1976d2;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #323232;
+            color: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 1000;
+            display: none;
+            max-width: 90%;
+        }
+        .toast.show {
+            display: block;
+            animation: slideUp 0.3s ease;
+        }
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+        .battery-note {
+            background: #e3f2fd;
+            border-left: 4px solid #1976d2;
+            padding: 12px;
+            margin-top: 20px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #1565c0;
+        }
+    </style>
+</head>
+<body data-session-id="{{ session_id }}" data-base-url="{{ base_url }}">
+    <div class="container">
+        <div class="header">
+            <h1>📱 Device Collector</h1>
+            <p>Tap "Start Scan" to collect device information</p>
+        </div>
+
+        {% if not is_https %}
+        <div id="https-banner" class="https-banner">
+            <button class="close-btn" onclick="this.parentElement.classList.add('dismissed')" aria-label="Dismiss">×</button>
+            <strong>⚠️ Limited Data Available:</strong> This page is not using HTTPS. Some browser APIs (Battery, Storage, RAM) require a secure context. 
+            <br><br>
+            <strong>To enable full functionality, use one of these HTTPS options:</strong>
+            <ul style="margin: 8px 0; padding-left: 20px;">
+                <li><strong>Cloudflare Tunnel:</strong> <code>cloudflared tunnel --url http://localhost:8080</code></li>
+                <li><strong>ngrok:</strong> <code>ngrok http 8080</code></li>
+                <li><strong>mkcert (localhost):</strong> Use <code>mkcert</code> to create self-signed cert for <code>https://localhost:8080</code></li>
+                <li><strong>Deploy:</strong> Deploy to Vercel, Render, or similar platform with HTTPS</li>
+            </ul>
+        </div>
+        {% endif %}
+
+        <div id="ios-banner" class="ios-banner" style="display: none;">
+            ℹ️ <strong>iOS/Safari Note:</strong> Some metrics (like battery API) may not be available on iOS/Safari due to browser limitations.
+        </div>
+
+        <div class="start-scan-section">
+            <button id="start-scan-btn" class="start-scan-btn">
+                🔍 Start Scan
+            </button>
+        </div>
+
+        <div id="status" class="status">
+            <span class="spinner"></span> <span id="status-text">Collecting device information...</span>
+        </div>
+
+        <div id="data-container" style="display: none;">
+            <h3>Collected Information</h3>
+            <div id="data-list"></div>
+            <div class="battery-note">
+                <strong>ℹ️ Note:</strong> Browsers do not expose true battery health (mAh/wear). We show live battery level + charging status on the web. 
+                Full battery health would require a future add-on via a tiny Android native collector that posts to the same session.
+            </div>
+            <div class="battery-note" id="storage-note" style="display: none;">
+                <strong>ℹ️ Note:</strong> This shows browser sandbox storage, not full device memory.
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        // Read sessionId from query string (sid parameter)
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionId = urlParams.get('sid') || document.body.dataset.sessionId;
+        // Use window.location.origin for any absolute URLs needed, but prefer relative paths
+        const baseUrl = window.location.origin;
+        let batteryManager = null;
+        let batteryHeartbeatInterval = null;
+        let lastBatteryLevel = null;
+        let isScanning = false;
+        let firstPostSuccess = false;
+        
+        console.log('[COLLECTOR] SessionId from query:', sessionId);
+
+        // Detect iOS/Safari
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+        if (isIOS || isSafari) {
+            document.getElementById('ios-banner').style.display = 'block';
+        }
+
+        // Check if secure context
+        const isSecure = window.location.protocol === 'https:';
+
+        // Helper to get reason for missing data
+        function getReason(key, value) {
+            if (value !== null && value !== undefined && value !== '') {
+                return null;
+            }
+            if (!isSecure) {
+                return 'Insecure context (enable HTTPS)';
+            }
+            if (key === 'battery') {
+                if (isIOS || isSafari) {
+                    return 'Not supported on iOS/Safari';
+                }
+                if (!navigator.getBattery) {
+                    return 'Not supported on this browser (use Android Chrome over HTTPS)';
+                }
+            }
+            // Check for permission denied scenarios
+            try {
+                if (key === 'battery' && !navigator.getBattery) {
+                    return 'Not supported on this browser (use Android Chrome over HTTPS)';
+                }
+                if (key === 'storage') {
+                    if (!isSecure) {
+                        return 'Insecure context (enable HTTPS)';
+                    }
+                    if (!navigator.storage || !navigator.storage.estimate) {
+                        return 'Storage info not available';
+                    }
+                }
+            } catch (e) {
+                return 'Permission denied';
+            }
+            return 'Not exposed by browser';
+        }
+
+        // Format bytes
+        function formatBytes(bytes) {
+            if (!bytes || bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        // Read User-Agent Client Hints (HTTPS only)
+        function getClientHints() {
+            if (!isSecure) return {};
+            
+            const hints = {};
+            try {
+                // Check if client hints are available
+                if (navigator.userAgentData) {
+                    hints.ua = navigator.userAgentData.brands?.map(b => `${b.brand}/${b.version}`).join(', ') || null;
+                    hints.platform = navigator.userAgentData.platform || null;
+                    hints.platformVersion = navigator.userAgentData.platformVersion || null;
+                    hints.model = navigator.userAgentData.model || null;
+                }
+            } catch (e) {
+                console.warn('Client hints not available:', e);
+            }
+            return hints;
+        }
+
+        // Collect device information (only after user taps Start Scan)
+        async function collectDeviceInfo() {
+            if (isScanning) return;
+            isScanning = true;
+
+            const statusEl = document.getElementById('status');
+            const statusText = document.getElementById('status-text');
+            statusEl.className = 'status collecting show';
+            statusText.textContent = 'Collecting device information...';
+
+            const snapshot = {
+                userAgent: navigator.userAgent,
+                platform: navigator.platform,
+                language: navigator.language,
+                screenWidth: window.screen.width,
+                screenHeight: window.screen.height,
+                pixelRatio: window.devicePixelRatio || 1,
+                hardwareConcurrency: navigator.hardwareConcurrency || null,
+                deviceMemory: navigator.deviceMemory || null,
+            };
+
+            // Add Client Hints if available
+            const clientHints = getClientHints();
+            if (clientHints.ua || clientHints.platform || clientHints.model) {
+                snapshot.clientHints = clientHints;
+            }
+
+            // Battery - only in secure context
+            try {
+                if (isSecure && navigator.getBattery) {
+                    batteryManager = await navigator.getBattery();
+                    const batteryLevel = Math.round(batteryManager.level * 100);
+                    snapshot.battery = {
+                        level: batteryLevel,
+                        charging: batteryManager.charging,
+                        chargingTime: batteryManager.chargingTime,
+                        dischargingTime: batteryManager.dischargingTime
+                    };
+                    // Immediately POST initial battery reading
+                    sendBatteryUpdate(batteryLevel, batteryManager.charging, true);
+                    // Set up live battery listener
+                    setupBatteryListener();
+                } else {
+                    snapshot.battery = null;
+                }
+            } catch (e) {
+                snapshot.battery = null;
+            }
+
+            // Storage - browser sandbox (only in secure context)
+            try {
+                if (isSecure && navigator.storage && navigator.storage.estimate) {
+                    const estimate = await navigator.storage.estimate();
+                    // Convert bytes to MB
+                    const quotaMB = Math.round((estimate.quota || 0) / (1024 * 1024));
+                    const usageMB = Math.round((estimate.usage || 0) / (1024 * 1024));
+                    const usagePercent = quotaMB > 0 ? Math.round((usageMB / quotaMB) * 100) : 0;
+                    
+                    snapshot.storage = {
+                        storageSandboxUsedMB: usageMB,
+                        storageSandboxQuotaMB: quotaMB,
+                        storageSandboxUsagePercent: usagePercent,
+                        storageSource: "browser sandbox",
+                        // Keep raw values for backward compatibility
+                        quota: estimate.quota,
+                        usage: estimate.usage,
+                        usageDetails: estimate.usageDetails || null
+                    };
+                } else {
+                    snapshot.storage = null;
+                }
+            } catch (e) {
+                snapshot.storage = null;
+            }
+
+            // Network
+            try {
+                if (navigator.connection) {
+                    const conn = navigator.connection;
+                    snapshot.network = {
+                        effectiveType: conn.effectiveType || null,
+                        downlink: conn.downlink || null,
+                        rtt: conn.rtt || null,
+                        saveData: conn.saveData || false
+                    };
+                } else {
+                    snapshot.network = null;
+                }
+            } catch (e) {
+                snapshot.network = null;
+            }
+
+            // WebGL GPU info
+            try {
+                const canvas = document.createElement('canvas');
+                const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                if (gl) {
+                    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                    if (debugInfo) {
+                        snapshot.gpu = {
+                            vendor: gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL),
+                            renderer: gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL)
+                        };
+                    } else {
+                        snapshot.gpu = null;
+                    }
+                } else {
+                    snapshot.gpu = null;
+                }
+            } catch (e) {
+                snapshot.gpu = null;
+            }
+
+            // Model/Manufacturer - use Client Hints first, then fallback to UA parsing
+            const clientHintsData = getClientHints();
+            if (clientHintsData.model) {
+                snapshot.model = clientHintsData.model;
+                snapshot.manufacturer = clientHintsData.platform || null;
+            } else {
+                const ua = navigator.userAgent.toLowerCase();
+                const isAndroid = ua.includes('android');
+                if (isAndroid) {
+                    const match = ua.match(/\(linux;.*?;\s*(.*?)\s*build\//i);
+                    if (match && match[1]) {
+                        const parts = match[1].split(';').map(p => p.trim());
+                        if (parts.length >= 2) {
+                            snapshot.manufacturer = parts[0];
+                            snapshot.model = parts[1];
+                        } else {
+                            snapshot.manufacturer = null;
+                            snapshot.model = null;
+                        }
+                    } else {
+                        snapshot.manufacturer = null;
+                        snapshot.model = null;
+                    }
+                } else {
+                    snapshot.manufacturer = null;
+                    snapshot.model = null;
+                }
+            }
+
+            return snapshot;
+        }
+
+        // Send battery update (debounced - only if level changed)
+        function sendBatteryUpdate(level, charging, force = false) {
+            if (!sessionId || !isSecure) {
+                console.warn('[COLLECTOR] No sessionId or not secure, skipping battery update');
+                return;
+            }
+
+            // Debounce: only send if integer percentage actually changed
+            if (!force && level === lastBatteryLevel) {
+                return;
+            }
+            lastBatteryLevel = level;
+
+            const payload = {
+                sid: sessionId,
+                level: level,
+                charging: charging,
+                ts: Date.now()
+            };
+
+            console.log('[COLLECTOR] Sending battery update:', payload);
+            // Use relative path for API calls
+            fetch('/api/live-battery', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).catch(err => console.error('[COLLECTOR] Battery update failed:', err));
+        }
+
+        // Setup battery listener for live updates
+        function setupBatteryListener() {
+            if (!batteryManager || !isSecure) return;
+
+            // Listen for level changes
+            batteryManager.addEventListener('levelchange', () => {
+                const level = Math.round(batteryManager.level * 100);
+                sendBatteryUpdate(level, batteryManager.charging, false);
+            });
+
+            // Listen for charging changes
+            batteryManager.addEventListener('chargingchange', () => {
+                const level = Math.round(batteryManager.level * 100);
+                sendBatteryUpdate(level, batteryManager.charging, false);
+            });
+
+            // Heartbeat: send every 30s
+            batteryHeartbeatInterval = setInterval(() => {
+                if (batteryManager) {
+                    const level = Math.round(batteryManager.level * 100);
+                    sendBatteryUpdate(level, batteryManager.charging, true); // Force send for heartbeat
+                }
+            }, 30000);
+
+            // Final POST on visibility change (tab hidden/visible)
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden && batteryManager) {
+                    const level = Math.round(batteryManager.level * 100);
+                    sendBatteryUpdate(level, batteryManager.charging, true);
+                }
+            });
+
+            // Final POST on beforeunload
+            window.addEventListener('beforeunload', () => {
+                if (batteryManager && sessionId) {
+                    const level = Math.round(batteryManager.level * 100);
+                    // Use sendBeacon for reliability on page unload
+                    const payload = JSON.stringify({
+                        sid: sessionId,
+                        level: level,
+                        charging: batteryManager.charging,
+                        ts: Date.now()
+                    });
+                    // sendBeacon requires Blob with proper content type
+                    const blob = new Blob([payload], { type: 'application/json' });
+                    // Use relative path for API calls
+                    navigator.sendBeacon('/api/live-battery', blob);
+                }
+            });
+        }
+
+        // Display collected data
+        function displayData(snapshot) {
+            const container = document.getElementById('data-container');
+            const list = document.getElementById('data-list');
+            list.innerHTML = '';
+
+            const fields = [
+                { key: 'manufacturer', label: 'Manufacturer' },
+                { key: 'model', label: 'Model' },
+                { key: 'platform', label: 'Platform' },
+                { key: 'deviceMemory', label: 'RAM', format: (v) => {
+                    if (!v) return null;
+                    return `~${v} GB (browser approx)`;
+                }},
+                { key: 'hardwareConcurrency', label: 'CPU Threads' },
+                { key: 'screenWidth', label: 'Screen Width', format: (v) => v ? `${v}px` : null },
+                { key: 'screenHeight', label: 'Screen Height', format: (v) => v ? `${v}px` : null },
+                { key: 'pixelRatio', label: 'Pixel Ratio' },
+                { key: 'battery', label: 'Battery', format: (v) => {
+                    if (!v || v.level === undefined) return null;
+                    return `${v.level}%${v.charging ? ' (Charging)' : ' (Not charging)'}`;
+                }},
+                { key: 'storage', label: 'Storage', format: (v) => {
+                    if (!v) return null;
+                    // Use new sandbox format if available
+                    if (v.storageSandboxQuotaMB !== undefined && v.storageSandboxUsedMB !== undefined) {
+                        return `Browser Sandbox: ${v.storageSandboxUsedMB} MB used of ${v.storageSandboxQuotaMB} MB (${v.storageSandboxUsagePercent}%)`;
+                    }
+                    // Fallback to old format
+                    if (v.quota) {
+                        const free = v.quota - v.usage;
+                        const freeGB = (free / (1024 * 1024 * 1024)).toFixed(2);
+                        const totalGB = (v.quota / (1024 * 1024 * 1024)).toFixed(2);
+                        return `${freeGB} GB free of ${totalGB} GB`;
+                    }
+                    return null;
+                }},
+                { key: 'network', label: 'Network', format: (v) => {
+                    if (!v || !v.effectiveType) return null;
+                    return `${v.effectiveType}${v.downlink ? ` (${v.downlink} Mbps)` : ''}`;
+                }},
+                { key: 'gpu', label: 'GPU', format: (v) => {
+                    if (!v) return null;
+                    return `${v.vendor} - ${v.renderer}`;
+                }}
+            ];
+
+            fields.forEach(field => {
+                const value = snapshot[field.key];
+                const formatted = field.format ? field.format(value) : value;
+                const reason = getReason(field.key, formatted);
+
+                const item = document.createElement('div');
+                item.className = 'data-item';
+                item.innerHTML = `
+                    <strong>${field.label}:</strong>
+                    <span>${formatted !== null && formatted !== undefined && formatted !== '' ? formatted : (reason || 'Storage info not available')}</span>
+                `;
+                if (reason) {
+                    const reasonEl = document.createElement('div');
+                    reasonEl.className = 'reason';
+                    reasonEl.textContent = reason;
+                    item.appendChild(reasonEl);
+                }
+                list.appendChild(item);
+            });
+
+            // Show storage note if storage data is available
+            if (snapshot.storage && snapshot.storage.storageSource === 'browser sandbox') {
+                document.getElementById('storage-note').style.display = 'block';
+            }
+
+            container.style.display = 'block';
+        }
+
+        // Show toast notification
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast show ${type}`;
+            setTimeout(() => {
+                toast.className = 'toast';
+            }, 3000);
+        }
+
+        // Send snapshot to server
+        async function sendSnapshot(snapshot) {
+            try {
+                const statusText = document.getElementById('status-text');
+                statusText.textContent = 'Sending data to server...';
+                
+                // Use relative path for API calls
+                const response = await fetch('/api/collect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId: sessionId,
+                        snapshot: snapshot
+                    })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    document.getElementById('status').className = 'status success show';
+                    document.getElementById('status-text').textContent = '✅ Data collected and sent successfully!';
+                    
+                    // Show green toast on first successful POST
+                    if (!firstPostSuccess) {
+                        showToast('Data sent to dashboard', 'success');
+                        firstPostSuccess = true;
+                    }
+                } else {
+                    throw new Error(result.error || 'Failed to send data');
+                }
+            } catch (error) {
+                document.getElementById('status').className = 'status error show';
+                document.getElementById('status-text').textContent = `❌ Error: ${error.message}`;
+                showToast(`Error: ${error.message}`, 'error');
+            } finally {
+                isScanning = false;
+            }
+        }
+
+        // Start Scan button handler
+        document.getElementById('start-scan-btn').addEventListener('click', async function() {
+            if (isScanning) return;
+            
+            this.disabled = true;
+            this.textContent = '⏳ Scanning...';
+            
+            try {
+                const snapshot = await collectDeviceInfo();
+                displayData(snapshot);
+                await sendSnapshot(snapshot);
+            } catch (error) {
+                document.getElementById('status').className = 'status error show';
+                document.getElementById('status-text').textContent = `❌ Error: ${error.message}`;
+                showToast(`Error: ${error.message}`, 'error');
+                isScanning = false;
+            } finally {
+                this.disabled = false;
+                this.textContent = '🔍 Start Scan';
+            }
+        });
+    </script>
+</body>
+</html>
