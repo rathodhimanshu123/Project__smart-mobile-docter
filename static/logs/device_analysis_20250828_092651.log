@@ -1,0 +1,35 @@
+=== Smart Mobile Doctor - Device Analysis Log ===
+Analysis Date: 2025-08-28 09:26:51
+Session ID: unknown
+
+=== Device Information ===
+model: Android Device
+manufacturer: Android
+androidVersion: Not Android
+userAgent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.3
+deviceInfo - model: Unknown
+deviceInfo - manufacturer: Unknown
+deviceInfo - platform: Linux armv81
+deviceInfo - osVersion: Unknown
+memoryInfo - deviceMemory: Unknown
+memoryInfo - totalJSHeapSize: 1 GB
+memoryInfo - usedJSHeapSize: 10 MB
+storageInfo - status: Storage information not available
+networkInfo - online: Yes
+networkInfo - type: 3g
+networkInfo - speed: 0.4 Mbps
+batteryInfo - status: Battery information not available
+timestamp: 2025-08-28 09:26:51
+systemInfo - platform: Linux armv81
+systemInfo - language: en-GB
+systemInfo - cookiesEnabled: true
+systemInfo - screenResolution: 360x804
+systemInfo - windowSize: 980x1829
+systemInfo - pixelRatio: 3
+systemInfo - timestamp: 2025-08-28T03:56:45.668Z
+
+=== OCR Analysis Results ===
+collection_status: Successful
+collected_at: 2025-08-28 09:26:51
+
+=== System Recommendations ===

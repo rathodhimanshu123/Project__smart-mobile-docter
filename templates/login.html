@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Smart Mobile Doctor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile.css') }}">
+    <style>
+        :root {
+            --primary-color: #6c63ff;
+            --bg-gradient: linear-gradient(120deg, #8e44ad, #6c63ff);
+            --text-color: #ffffff;
+            --card-bg: rgba(255, 255, 255, 0.1);
+            --input-bg: rgba(255, 255, 255, 0.2);
+            --button-gradient: linear-gradient(to right, #ff6b6b, #ff8e8e);
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            --bg-secondary: rgba(0, 0, 0, 0.3);
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --accent-color: #4ecdc4;
+            --success-color: #51cf66;
+            --error-color: #ff6b6b;
+            --shadow-color: rgba(0, 0, 0, 0.3);
+            --input-bg: rgba(255, 255, 255, 0.1);
+            --input-border: rgba(255, 255, 255, 0.2);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        body {
+            min-height: 100vh;
+            background: var(--bg-gradient);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        /* Floating geometric shapes */
+        body::before,
+        body::after {
+            content: '';
+            position: fixed;
+            border-radius: 50%;
+            background: linear-gradient(180deg, var(--accent-color), transparent);
+            opacity: 0.1;
+            filter: blur(40px);
+            animation: float 20s ease-in-out infinite;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        body::before {
+            width: 400px;
+            height: 400px;
+            top: -100px;
+            left: -100px;
+            animation-delay: 0s;
+        }
+
+        body::after {
+            width: 300px;
+            height: 300px;
+            bottom: -50px;
+            right: -50px;
+            animation-delay: 10s;
+            background: linear-gradient(180deg, #9d50bb, transparent);
+        }
+
+        @keyframes float {
+            0%, 100% { 
+                transform: translate(0px, 0px) rotate(0deg);
+                opacity: 0.1;
+            }
+            33% {
+                transform: translate(30px, -30px) rotate(120deg);
+                opacity: 0.15;
+            }
+            66% {
+                transform: translate(-20px, 20px) rotate(240deg);
+                opacity: 0.1;
+            }
+        }
+
+        /* Theme Toggle */
+        .theme-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 50px;
+            padding: 10px 15px;
+            cursor: pointer;
+            backdrop-filter: blur(20px);
+            color: var(--text-primary);
+            font-size: 18px;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .theme-toggle:hover {
+            background: var(--input-bg);
+            transform: scale(1.1);
+        }
+
+        .auth-container {
+            width: 100%;
+            max-width: 480px;
+            margin: 20px;
+            z-index: 10;
+            position: relative;
+        }
+
+        .auth-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: 
+                0 10px 25px var(--shadow-color),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+            transform: translateY(30px);
+            opacity: 0;
+            animation: slideUp 0.6s ease-out forwards;
+        }
+
+        .auth-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--accent-color), transparent);
+            animation: shimmer 2s ease-in-out infinite;
+        }
+
+        @keyframes slideUp {
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .auth-header {
+            text-align: center;
+            margin-bottom: 40px;
+            opacity: 0;
+            animation: fadeIn 0.8s ease-out 0.5s forwards;
+        }
+
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+
+        .logo-container {
+            width: 100px;
+            height: 100px;
+            margin: 0 auto 24px;
+            background: linear-gradient(135deg, var(--accent-color), #ff8a80);
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 15px 35px rgba(255, 107, 107, 0.3);
+            animation: logoFloat 3s ease-in-out infinite;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .logo-container::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            animation: logoShine 3s ease-in-out infinite;
+        }
+
+        @keyframes logoFloat {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        @keyframes logoShine {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .logo-container i {
+            font-size: 2.5rem;
+            color: white;
+            z-index: 2;
+            position: relative;
+        }
+
+        .auth-header h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--text-primary);
+            margin: 0 0 12px;
+            background: linear-gradient(135deg, var(--text-primary), var(--accent-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.5px;
+        }
+
+        .auth-header p {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            margin: 0;
+            font-weight: 400;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInUp 0.6s ease-out forwards;
+        }
+
+        .form-group:nth-child(1) { animation-delay: 0.7s; }
+        .form-group:nth-child(2) { animation-delay: 0.8s; }
+        .form-group:nth-child(3) { animation-delay: 0.9s; }
+
+        @keyframes fadeInUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .input-group {
+            position: relative;
+            margin-bottom: 8px;
+        }
+
+        .input-group i {
+            position: absolute;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+            z-index: 2;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 16px 20px 16px 50px;
+            font-size: 1rem;
+            font-weight: 400;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            background: var(--input-bg);
+            backdrop-filter: blur(8px);
+            color: var(--text-primary);
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+            display: block;
+            position: relative;
+            z-index: 1;
+            box-shadow: inset 0 1px 2px var(--shadow-color);
+        }
+        
+        input[type="password"] {
+            -webkit-text-security: disc;
+            letter-spacing: 0.1em;
+        }
+
+        .form-control::placeholder {
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--accent-color);
+            background: rgba(255, 255, 255, 0.25);
+            box-shadow: 0 0 0 4px rgba(255, 107, 107, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .form-control:focus + i {
+            color: var(--accent-color);
+            transform: translateY(-50%) scale(1.1);
+        }
+
+        .form-control.error {
+            border-color: var(--error-color);
+            animation: shake 0.5s ease-in-out;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .error-message {
+            color: var(--error-color);
+            font-size: 0.875rem;
+            margin-top: 8px;
+            padding: 8px 12px;
+            background: rgba(255, 107, 107, 0.1);
+            border-radius: 8px;
+            border-left: 3px solid var(--error-color);
+            display: none;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Password Toggle */
+        .password-toggle {
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+            z-index: 2;
+        }
+
+        .password-toggle:hover {
+            color: var(--accent-color);
+            transform: translateY(-50%) scale(1.1);
+        }
+
+        .btn-primary {
+            width: 100%;
+            padding: 16px 24px;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 12px;
+            background: var(--button-gradient);
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInUp 0.6s ease-out 1s forwards;
+            box-shadow: 0 8px 20px var(--shadow-color);
+        }
+
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.6s ease;
+        }
+
+        .btn-primary:hover::before {
+            left: 100%;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 35px rgba(255, 107, 107, 0.4);
+        }
+
+        .btn-primary:active {
+            transform: translateY(-1px);
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.3);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 32px 0;
+            opacity: 0;
+            animation: fadeIn 0.6s ease-out 1.1s forwards;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--glass-border), transparent);
+        }
+
+        .divider-text {
+            padding: 0 20px;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .social-signin {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 32px;
+            opacity: 0;
+            animation: fadeIn 0.6s ease-out 1.2s forwards;
+        }
+
+        .social-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 12px 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            background: var(--input-bg);
+            backdrop-filter: blur(8px);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            text-decoration: none;
+            color: var(--text-primary);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .social-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .social-btn:hover::before {
+            left: 100%;
+        }
+
+        .social-btn:hover {
+            border-color: var(--accent-color);
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px var(--shadow-color);
+        }
+
+        .social-btn i {
+            margin-right: 8px;
+            font-size: 1.2rem;
+            z-index: 2;
+            position: relative;
+        }
+
+        .google-btn i { color: #ea4335; }
+        .facebook-btn i { color: #1877f2; }
+
+        .auth-footer {
+            text-align: center;
+            margin-top: 28px;
+            color: var(--text-secondary);
+            opacity: 0;
+            animation: fadeIn 0.6s ease-out 1.3s forwards;
+            font-size: 0.9rem;
+            font-weight: 400;
+        }
+
+        .auth-footer a {
+            color: var(--accent-color);
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .auth-footer a:hover {
+            text-decoration: underline;
+            color: var(--accent-color);
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .auth-footer a::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--accent-color);
+            transition: width 0.3s ease;
+        }
+
+        .auth-footer a:hover::after {
+            width: 100%;
+        }
+
+        .loading-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent-color), #ff8a80);
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+            display: none;
+            border-radius: 24px 24px 0 0;
+        }
+
+        .loading-bar.active {
+            display: block;
+            animation: loading 1.5s ease-in-out infinite;
+        }
+
+        @keyframes loading {
+            0% { transform: translateX(-100%); }
+            50% { transform: translateX(0); }
+            100% { transform: translateX(100%); }
+        }
+
+        /* Flash Messages */
+        .flash-messages {
+            margin-bottom: 24px;
+        }
+
+        .flash-message {
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            backdrop-filter: blur(10px);
+            border: 1px solid;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .flash-message.success {
+            background: rgba(81, 207, 102, 0.15);
+            border-color: var(--success-color);
+            color: var(--success-color);
+        }
+
+        .flash-message.error {
+            background: rgba(255, 107, 107, 0.15);
+            border-color: var(--error-color);
+            color: var(--error-color);
+        }
+
+        .flash-message.info {
+            background: rgba(76, 201, 240, 0.15);
+            border-color: #4cc9f0;
+            color: #4cc9f0;
+        }
+
+        .close-flash {
+            background: none;
+            border: none;
+            color: inherit;
+            cursor: pointer;
+            font-size: 1.2rem;
+            margin-left: auto;
+            opacity: 0.7;
+            transition: opacity 0.3s ease;
+        }
+
+        .close-flash:hover {
+            opacity: 1;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .auth-container {
+                margin: 16px;
+            }
+            
+            .auth-card {
+                padding: 32px 24px;
+            }
+            
+            .social-signin {
+                grid-template-columns: 1fr;
+            }
+
+            .auth-header h1 {
+                font-size: 2rem;
+            }
+
+            .logo-container {
+                width: 80px;
+                height: 80px;
+            }
+
+            .theme-toggle {
+                top: 16px;
+                right: 16px;
+                padding: 8px 12px;
+                font-size: 16px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .auth-card {
+                padding: 24px 20px;
+            }
+
+            .form-control {
+                padding: 16px 18px 16px 50px;
+            }
+
+            .btn-primary {
+                padding: 16px 20px;
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+<body data-theme="light">
+    <!-- Theme Toggle -->
+    <div class="theme-toggle" id="themeToggle">
+        <i class="fas fa-moon" id="themeIcon"></i>
+    </div>
+
+    <div class="auth-container">
+        <div class="auth-card">
+            <div class="loading-bar" id="loadingBar"></div>
+            
+            <div class="auth-header">
+                <div class="logo-container">
+                    <i class="fas fa-mobile-alt"></i>
+                </div>
+                <h1>Welcome Back</h1>
+                <p>Sign in to continue to Smart Mobile Doctor</p>
+            </div>
+
+            <!-- Flash Messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-messages">
+                        {% for category, message in messages %}
+                            <div class="flash-message {{ category }} animate-fade-in">
+                                <i class="fas fa-{% if category == 'success' %}check-circle{% elif category == 'error' %}exclamation-circle{% elif category == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %}"></i>
+                                <span>{{ message }}</span>
+                                <button class="close-flash" onclick="this.parentElement.remove()">×</button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            <form id="loginForm" action="{{ url_for('login') }}" method="POST">
+                <div class="form-group">
+                    <div class="input-group">
+                        <input type="email" class="form-control" id="email" name="email" placeholder="Enter your email address" value="{{ request.form.email }}" autocomplete="email" required>
+                        <i class="fas fa-envelope"></i>
+                    </div>
+                    {% if error and 'email' in error %}
+                    <div class="error-message">{{ error }}</div>
+                    {% endif %}
+                </div>
+                
+                <div class="form-group">
+                    <div class="input-group">
+                        <input type="password" class="form-control" id="password" name="password" placeholder="Enter your password" autocomplete="current-password" required>
+                        <i class="fas fa-lock"></i>
+                        <button type="button" class="password-toggle" id="passwordToggle" tabindex="-1" aria-label="Toggle password visibility">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                    {% if error and 'password' in error %}
+                    <div class="error-message">{{ error }}</div>
+                    {% endif %}
+                </div>
+                
+                <button type="submit" class="btn-primary" id="loginBtn">
+                    <i class="fas fa-sign-in-alt"></i>
+                    Sign In
+                </button>
+
+                {% if error and not 'email' in error and not 'password' in error %}
+                <div class="error-message">{{ error }}</div>
+                {% endif %}
+            </form>
+
+            <div class="divider">
+                <span class="divider-text">or continue with</span>
+            </div>
+
+            <div class="social-signin">
+                <button class="social-btn google-btn" id="googleSignInBtn">
+                    <i class="fab fa-google"></i>
+                    Google
+                </button>
+                <button class="social-btn facebook-btn" id="facebookSignInBtn">
+                    <i class="fab fa-facebook-f"></i>
+                    Facebook
+                </button>
+            </div>
+
+            <div class="auth-footer">
+                Don't have an account? <a href="{{ url_for('register') }}">Create Account</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const loginForm = document.getElementById('loginForm');
+            const passwordInput = document.getElementById('password');
+            const passwordToggle = document.getElementById('passwordToggle');
+            const themeToggle = document.getElementById('themeToggle');
+            const themeIcon = document.getElementById('themeIcon');
+            const loadingBar = document.getElementById('loadingBar');
+            
+            // Ensure password field is properly set up
+            if (passwordInput) {
+                passwordInput.type = 'password';
+                passwordInput.style.letterSpacing = '0.1em';
+            }
+            
+            // Password visibility toggle
+            if (passwordToggle && passwordInput) {
+                passwordToggle.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const type = passwordInput.type === 'password' ? 'text' : 'password';
+                    passwordInput.type = type;
+                    passwordToggle.querySelector('i').className = type === 'password' ? 'fas fa-eye' : 'fas fa-eye-slash';
+                });
+            }
+
+            // Theme Toggle
+            if (themeToggle && themeIcon) {
+                themeToggle.addEventListener('click', function() {
+                    const currentTheme = document.body.getAttribute('data-theme');
+                    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+                    
+                    document.body.setAttribute('data-theme', newTheme);
+                    localStorage.setItem('theme', newTheme);
+                    themeIcon.className = newTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+                });
+            }
+
+            // Load saved theme
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            document.body.setAttribute('data-theme', savedTheme);
+            themeIcon.className = savedTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
+
+            // Helpers for loading bar
+            function showLoading() { if (loadingBar) loadingBar.classList.add('active'); }
+            function hideLoading() { if (loadingBar) loadingBar.classList.remove('active'); }
+
+            function validateForm() {
+                const email = document.getElementById('email').value.trim();
+                const password = document.getElementById('password').value;
+                return !!(email && password);
+            }
+
+            // Form submission handling via fetch to stay on SPA and redirect on success
+            if (loginForm) {
+                loginForm.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    const email = document.getElementById('email').value.trim();
+                    const password = document.getElementById('password').value;
+
+                    if (!validateForm()) {
+                        showNotification('Validation Error', 'Email and password are required', 'error');
+                        return;
+                    }
+
+                    showLoading();
+                    try {
+                        const response = await fetch('{{ url_for('login') }}', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email, password })
+                        });
+                        const data = await response.json();
+                        if (data && data.success) {
+                            window.location.href = data.redirect || '{{ url_for('index') }}';
+                        } else {
+                            showNotification('Login Failed', (data && data.message) || 'Invalid email or password', 'error');
+                        }
+                    } catch (error) {
+                        console.error('Login error:', error);
+                        showNotification('Error', 'An error occurred. Please try again.', 'error');
+                    } finally {
+                        hideLoading();
+                    }
+                });
+            }
+        });
+        
+        function handleSocialSignIn(provider) {
+            const btn = document.getElementById(`${provider}SignInBtn`);
+            const originalText = btn.innerHTML;
+            
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Connecting...`;
+            
+            document.getElementById('loadingBar').classList.add('active');
+            
+            fetch(`/auth/${provider}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('Login Successful', `Welcome! Signed in with ${provider}`, 'success');
+                    setTimeout(() => {
+                        window.location.href = data.redirect || '/';
+                    }, 1000);
+                } else {
+                    showNotification('Feature Coming Soon', data.message || `${provider} authentication will be available soon`, 'info');
+                }
+            })
+            .catch(error => {
+                console.error('Social auth error:', error);
+                showNotification('Feature Coming Soon', `${provider} authentication will be available soon`, 'info');
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                document.getElementById('loadingBar').classList.remove('active');
+            });
+        }
+        
+        function showNotification(title, message, type = 'info') {
+            // Create notification element
+            const notification = document.createElement('div');
+            notification.className = `flash-message ${type} animate-fade-in`;
+            
+            let iconClass = 'info-circle';
+            if (type === 'success') iconClass = 'check-circle';
+            if (type === 'error') iconClass = 'exclamation-circle';
+            if (type === 'warning') iconClass = 'exclamation-triangle';
+            
+            notification.innerHTML = `
+                <i class="fas fa-${iconClass}"></i>
+                <span><strong>${title}:</strong> ${message}</span>
+                <button class="close-flash" onclick="this.parentElement.remove()">×</button>
+            `;
+            
+            // Add to page
+            let container = document.querySelector('.flash-messages');
+            if (!container) {
+                container = document.createElement('div');
+                container.className = 'flash-messages';
+                document.querySelector('.auth-card').insertBefore(container, document.querySelector('form'));
+            }
+            
+            container.appendChild(notification);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (notification.parentElement) {
+                    notification.remove();
+                }
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

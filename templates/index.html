@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Mobile Doctor - AI-Powered Mobile Diagnostics</title>
+    <meta name="description" content="Diagnose and optimize your mobile device with AI-powered analysis. Upload screenshots for instant device health insights.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modern-style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile.css') }}">
+</head>
+<body class="animate-fade-in">
+    <div class="page-container">
+        <nav class="top-nav">
+            <div class="nav-content">
+                <div class="logo">
+                    <i class="fas fa-stethoscope"></i>
+                    <span>Smart Mobile Doctor</span>
+                </div>
+                <div class="nav-actions">
+                    <button id="themeToggle" class="theme-btn" aria-label="Toggle dark mode">
+                        <i class="fas fa-moon"></i>
+                    </button>
+                    <a href="{{ url_for('logout') }}" class="theme-btn" style="margin-left: 8px;" aria-label="Logout">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </a>
+                </div>
+            </div>
+        </nav>
+
+        <div class="hero-section animate-slide-up">
+            <h1>Smart Mobile Doctor</h1>
+            <p class="hero-text">Transform your mobile device diagnostics with cutting-edge AI analysis. Get instant insights, performance optimization, and expert recommendations.</p>
+            <div class="feature-cards">
+                <div class="feature-card animate-slide-up" style="animation-delay: 0.1s">
+                    <i class="fas fa-upload"></i>
+                    <h3>Upload Screenshot</h3>
+                    <p>Simply upload your device's settings screenshot for instant analysis</p>
+                </div>
+                <div class="feature-card animate-slide-up" style="animation-delay: 0.2s">
+                    <i class="fas fa-brain"></i>
+                    <h3>AI Analysis</h3>
+                    <p>Advanced machine learning algorithms diagnose performance issues</p>
+                </div>
+                <div class="feature-card animate-slide-up" style="animation-delay: 0.3s">
+                    <i class="fas fa-rocket"></i>
+                    <h3>Optimization Tips</h3>
+                    <p>Receive personalized recommendations to boost your device performance</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="upload-container animate-slide-up" style="animation-delay: 0.4s">
+                <div class="upload-area" id="dropZone">
+                    <form id="uploadForm" action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data">
+                        <div class="upload-icon">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                        </div>
+                        <h2>Upload Device Screenshot</h2>
+                        <p>Drag and drop your device's settings screenshot or click to browse. We support JPG, PNG, and JPEG formats.</p>
+                        <div class="file-input-container">
+                            <input type="file" id="phone_image" name="phone_image" accept="image/jpeg,image/jpg,image/png" class="file-input" required>
+                            <button type="button" class="browse-btn" onclick="document.getElementById('phone_image').click()">
+                                <i class="fas fa-folder-open"></i>
+                                Choose File
+                            </button>
+                            <span id="selected-file-name" class="selected-file-name">No file chosen</span>
+                        </div>
+                        
+                        <button type="submit" class="submit-btn" id="uploadButton" disabled>
+                            <i class="fas fa-magic"></i>
+                            Analyze Device
+                        </button>
+                        
+                        <div class="upload-progress hidden">
+                            <div class="progress-bar">
+                                <div class="progress-fill"></div>
+                            </div>
+                            <span class="progress-text">Processing... 0%</span>
+                        </div>
+                    </form>
+                </div>
+
+                <div id="previewContainer" class="preview-container hidden">
+                    <div class="preview-header">
+                        <h3>Preview</h3>
+                        <button id="removePreview" class="remove-btn">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="preview-image">
+                        <img id="imagePreview" src="#" alt="Preview">
+                    </div>
+                    <button type="submit" form="uploadForm" class="submit-btn">
+                        <i class="fas fa-check"></i>
+                        Analyze Screenshot
+                    </button>
+                </div>
+            </div>
+
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    <div class="flash-messages animate-fade-in">
+                        {% for message in messages %}
+                            <div class="flash-message">
+                                <i class="fas fa-info-circle"></i>
+                                <span>{{ message }}</span>
+                                <button class="close-flash">×</button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            <div class="info-section animate-slide-up" style="animation-delay: 0.5s">
+                <h2>What Information We Analyze</h2>
+                <p style="text-align: center; margin-bottom: 2rem; color: var(--text-secondary); max-width: 600px; margin-left: auto; margin-right: auto;">Our AI analyzes your device screenshot to extract key performance indicators and provide comprehensive diagnostics.</p>
+                <div class="info-grid" id="infoGrid">
+                    <div class="info-card" data-target="model">
+                        <i class="fas fa-mobile-alt"></i>
+                        <span>Device Model</span>
+                    </div>
+                    <div class="info-card" data-target="ram">
+                        <i class="fas fa-memory"></i>
+                        <span>RAM Capacity</span>
+                    </div>
+                    <div class="info-card" data-target="processor">
+                        <i class="fas fa-microchip"></i>
+                        <span>Processor Info</span>
+                    </div>
+                    <div class="info-card" data-target="storage">
+                        <i class="fas fa-hdd"></i>
+                        <span>Storage Space</span>
+                    </div>
+                    <div class="info-card" data-target="battery">
+                        <i class="fas fa-battery-three-quarters"></i>
+                        <span>Battery Health</span>
+                    </div>
+                    <div class="info-card" data-target="os_version">
+                        <i class="fas fa-cog"></i>
+                        <span>OS Version</span>
+                    </div>
+                </div>
+                
+                <div style="text-align: center; margin-top: 3rem; padding: 2rem; background: var(--accent-light); border-radius: var(--radius-2xl); border: 1px solid var(--primary-200);">
+                    <h3 style="color: var(--accent-primary); margin-bottom: 1rem;"><i class="fas fa-lightbulb"></i> Pro Tip</h3>
+                    <p style="margin: 0; color: var(--text-secondary);">For best results, upload a screenshot from your device's <strong>Settings → About Phone</strong> section. This ensures our AI can extract all necessary information for accurate analysis.</p>
+                </div>
+            </div>
+        </div>
+        
+        <footer class="modern-footer">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4><i class="fas fa-stethoscope"></i> Smart Mobile Doctor</h4>
+                    <p>Revolutionizing mobile device diagnostics with artificial intelligence. Get instant insights and optimization recommendations for your devices.</p>
+                    <div class="social-links">
+                        <a href="#" class="social-link" aria-label="GitHub"><i class="fab fa-github"></i></a>
+                        <a href="#" class="social-link" aria-label="LinkedIn"><i class="fab fa-linkedin"></i></a>
+                        <a href="#" class="social-link" aria-label="Twitter"><i class="fab fa-twitter"></i></a>
+                    </div>
+                </div>
+                <div class="footer-section">
+                    <h4>Features</h4>
+                    <ul>
+                        <li><a href="#"><i class="fas fa-brain"></i> AI Diagnostics</a></li>
+                        <li><a href="#"><i class="fas fa-chart-line"></i> Performance Analysis</a></li>
+                        <li><a href="#"><i class="fas fa-tools"></i> Optimization Tips</a></li>
+                        <li><a href="#"><i class="fas fa-shield-alt"></i> Security Check</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Support</h4>
+                    <ul>
+                        <li><a href="#"><i class="fas fa-question-circle"></i> Help Center</a></li>
+                        <li><a href="#"><i class="fas fa-book"></i> Documentation</a></li>
+                        <li><a href="#"><i class="fas fa-envelope"></i> Contact Support</a></li>
+                        <li><a href="#"><i class="fas fa-bug"></i> Report Issues</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 Smart Mobile Doctor - Advanced Mobile Diagnostics Platform. All rights reserved.</p>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const dropZone = document.getElementById('dropZone');
+            const fileInput = document.getElementById('phone_image');
+            const uploadForm = document.getElementById('uploadForm');
+            const progressBar = document.querySelector('.progress-fill');
+            const progressText = document.querySelector('.progress-text');
+            const uploadProgress = document.querySelector('.upload-progress');
+            const themeToggle = document.getElementById('themeToggle');
+            const uploadButton = document.getElementById('uploadButton');
+            const selectedFileName = document.getElementById('selected-file-name');
+            const infoGrid = document.getElementById('infoGrid');
+            const previewContainer = document.getElementById('previewContainer');
+            const removePreview = document.getElementById('removePreview');
+            const imagePreview = document.getElementById('imagePreview');
+            
+            // Feature toggle: disable dashboard functionality when set to false
+            const featureEnabled = true;
+            if (!featureEnabled) {
+                if (fileInput) fileInput.disabled = true;
+                if (uploadButton) {
+                    uploadButton.disabled = true;
+                    uploadButton.title = 'This feature is currently disabled';
+                }
+                if (dropZone) dropZone.classList.add('disabled');
+            }
+
+            // Theme Toggle
+            themeToggle.addEventListener('click', () => {
+                document.body.classList.toggle('dark-theme');
+                const icon = themeToggle.querySelector('i');
+                icon.classList.toggle('fa-moon');
+                icon.classList.toggle('fa-sun');
+            });
+
+            // File Upload Handling
+            function handleFile(file) {
+                if (file) {
+                    if (file.type.startsWith('image/')) {
+                        // Update the selected file name display
+                        selectedFileName.textContent = file.name;
+                        // Enable the upload button
+                        uploadButton.disabled = false;
+                        
+                        // Show visual feedback
+                        dropZone.classList.add('file-selected');
+                        showSuccess('File selected successfully');
+                        // Show preview
+                        if (imagePreview && previewContainer) {
+                            const reader = new FileReader();
+                            reader.onload = (e) => {
+                                imagePreview.src = e.target.result;
+                                previewContainer.classList.remove('hidden');
+                            };
+                            reader.readAsDataURL(file);
+                        }
+                    } else {
+                        fileInput.value = '';
+                        selectedFileName.textContent = 'No file chosen';
+                        uploadButton.disabled = true;
+                        showError('Please upload an image file (JPG, PNG, or JPEG)');
+                    }
+                } else {
+                    selectedFileName.textContent = 'No file chosen';
+                    uploadButton.disabled = true;
+                }
+            }
+
+            // Make whole drop zone open the file chooser on click/keyboard
+            if (dropZone) {
+                dropZone.addEventListener('click', (e) => {
+                    // Avoid double-submit if clicking inside the inner button
+                    if (e.target && (e.target.closest('.browse-btn') || e.target.tagName === 'INPUT')) return;
+                    fileInput && fileInput.click();
+                });
+                dropZone.tabIndex = 0;
+                dropZone.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        fileInput && fileInput.click();
+                    }
+                });
+            }
+
+            // Drag and Drop
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('dragover');
+            });
+
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('dragover');
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('dragover');
+                const file = e.dataTransfer.files[0];
+                fileInput.files = e.dataTransfer.files;
+                handleFile(file);
+            });
+
+            // Browse Button is already handled by the onclick attribute in HTML
+            // No need for additional event listener
+
+            fileInput.addEventListener('change', () => {
+                handleFile(fileInput.files[0]);
+            });
+
+            // Remove Preview
+            if (removePreview && previewContainer) {
+                removePreview.addEventListener('click', () => {
+                    fileInput.value = '';
+                    imagePreview && (imagePreview.src = '#');
+                    previewContainer.classList.add('hidden');
+                    dropZone.classList.remove('hidden');
+                    selectedFileName.textContent = 'No file chosen';
+                    uploadButton.disabled = true;
+                });
+            }
+
+            // Support pasting an image from clipboard
+            document.addEventListener('paste', (event) => {
+                const items = event.clipboardData && event.clipboardData.items;
+                if (!items) return;
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    if (item.type && item.type.indexOf('image') !== -1) {
+                        const file = item.getAsFile();
+                        if (file) {
+                            handleFile(file);
+                            // Create a DataTransfer to set fileInput.files
+                            const dt = new DataTransfer();
+                            dt.items.add(file);
+                            fileInput.files = dt.files;
+                        }
+                        break;
+                    }
+                }
+            });
+
+            // Form Submit - use native submission to let server handle redirect
+            uploadForm.addEventListener('submit', (e) => {
+                if (!featureEnabled) {
+                    e.preventDefault();
+                    showError('This feature is currently disabled.');
+                    return;
+                }
+                const file = fileInput.files[0];
+                if (!file) {
+                    e.preventDefault();
+                    showError('Please select a file first');
+                    return;
+                }
+                // Show simple loading state while the browser submits the form
+                uploadButton.disabled = true;
+                uploadButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+                uploadProgress.classList.remove('hidden');
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress = Math.min(progress + 5, 95);
+                    progressBar.style.width = `${progress}%`;
+                    progressText.textContent = `Uploading... ${progress}%`;
+                }, 120);
+                // Allow navigation; clear animation after a while in case of slow network
+                setTimeout(() => clearInterval(interval), 20000);
+            });
+
+            // Flash Message Handling
+            document.querySelectorAll('.close-flash').forEach(button => {
+                button.addEventListener('click', () => {
+                    button.parentElement.remove();
+                });
+            });
+
+            // Message Display
+            function showMessage(message, type = 'error') {
+                const flashMessages = document.querySelector('.flash-messages');
+                if (!flashMessages) return;
+
+                const flashMessage = document.createElement('div');
+                flashMessage.className = `flash-message animate-fade-in ${type}`;
+                
+                const icon = type === 'success' ? 'check-circle' : 'exclamation-circle';
+                
+                flashMessage.innerHTML = `
+                    <i class="fas fa-${icon}"></i>
+                    <span>${message}</span>
+                    <button class="close-flash">×</button>
+                `;
+                flashMessages.appendChild(flashMessage);
+
+                // Add click handler for close button
+                flashMessage.querySelector('.close-flash').addEventListener('click', () => {
+                    flashMessage.remove();
+                });
+
+                // Auto-remove after 5 seconds
+                setTimeout(() => {
+                    flashMessage.remove();
+                }, 5000);
+            }
+
+            function showError(message) {
+                showMessage(message, 'error');
+            }
+
+            function showSuccess(message) {
+                showMessage(message, 'success');
+            }
+
+            // Make the info cards runnable: clicking any card starts the analysis flow
+            if (infoGrid) {
+                infoGrid.querySelectorAll('.info-card').forEach(card => {
+                    card.tabIndex = 0;
+                    const label = card.querySelector('span')?.textContent || 'this metric';
+                    const promptMsg = `Select your About Phone screenshot to analyze ${label}.`;
+                    const startSelect = () => {
+                        showSuccess(promptMsg);
+                        if (fileInput) fileInput.click();
+                        // focus the upload area
+                        dropZone && dropZone.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    };
+                    card.addEventListener('click', startSelect);
+                    card.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            startSelect();
+                        }
+                    });
+                });
+            }
+        });
+    </script>
+</body>
+</html>
