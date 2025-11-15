@@ -12,6 +12,186 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile.css') }}" type="text/css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/result.css') }}" type="text/css">
     <style>
+        /* AI Health Diagnosis Styles */
+        .ai-health-card {
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        
+        .ai-health-card.excellent {
+            border-color: #10b981;
+            animation: glow-pulse-green 2s ease-in-out infinite;
+        }
+        
+        .ai-health-card.good {
+            border-color: #3b82f6;
+            animation: glow-pulse-blue 2s ease-in-out infinite;
+        }
+        
+        .ai-health-card.moderate {
+            border-color: #f59e0b;
+            animation: glow-pulse-yellow 2s ease-in-out infinite;
+        }
+        
+        .ai-health-card.critical {
+            border-color: #ef4444;
+            animation: glow-pulse-red 2s ease-in-out infinite;
+        }
+        
+        @keyframes glow-pulse-green {
+            0%, 100% { box-shadow: 0 0 10px rgba(16, 185, 129, 0.3); }
+            50% { box-shadow: 0 0 20px rgba(16, 185, 129, 0.6); }
+        }
+        
+        @keyframes glow-pulse-blue {
+            0%, 100% { box-shadow: 0 0 10px rgba(59, 130, 246, 0.3); }
+            50% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.6); }
+        }
+        
+        @keyframes glow-pulse-yellow {
+            0%, 100% { box-shadow: 0 0 10px rgba(245, 158, 11, 0.3); }
+            50% { box-shadow: 0 0 20px rgba(245, 158, 11, 0.6); }
+        }
+        
+        @keyframes glow-pulse-red {
+            0%, 100% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.3); }
+            50% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); }
+        }
+        
+        .health-status-badge {
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            transition: all 0.3s ease;
+        }
+        
+        .health-status-badge.excellent {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+        
+        .health-status-badge.good {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+        }
+        
+        .health-status-badge.moderate {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+        }
+        
+        .health-status-badge.critical {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+        }
+        
+        .health-status-badge.unknown {
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+        }
+        
+        .ai-health-content {
+            position: relative;
+            z-index: 1;
+        }
+        
+        /* Live Performance Monitor Styles */
+        .live-monitor-card {
+            position: relative;
+        }
+        
+        .live-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ef4444;
+            display: inline-block;
+            animation: pulse-dot 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+        
+        .gauges-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: var(--space-6);
+        }
+        
+        .gauge-container {
+            background: var(--bg-tertiary);
+            border-radius: var(--radius-xl);
+            padding: var(--space-4);
+            transition: transform 0.2s ease;
+        }
+        
+        .gauge-container:hover {
+            transform: translateY(-2px);
+        }
+        
+        .gauge-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-3);
+        }
+        
+        .gauge-label {
+            font-weight: 600;
+            font-size: var(--text-sm);
+            color: var(--text-primary);
+        }
+        
+        .gauge-update-time {
+            font-size: var(--text-xs);
+            color: var(--text-secondary);
+        }
+        
+        .gauge-wrapper {
+            position: relative;
+            width: 100%;
+            padding-bottom: 60%;
+        }
+        
+        .gauge-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .gauge-track {
+            stroke-dasharray: 251.2;
+            stroke-dashoffset: 0;
+        }
+        
+        .gauge-arc {
+            stroke-dasharray: 251.2;
+            stroke-dashoffset: 251.2;
+            transition: stroke-dashoffset 0.5s ease, stroke 0.3s ease;
+            transform-origin: center;
+        }
+        
+        .gauge-value {
+            transition: fill 0.3s ease;
+        }
+        
+        .gauge-arc.green {
+            stroke: #10b981;
+        }
+        
+        .gauge-arc.yellow {
+            stroke: #f59e0b;
+        }
+        
+        .gauge-arc.red {
+            stroke: #ef4444;
+        }
+        
         /* Additional styles for results page */
         .results-hero {
             background: linear-gradient(135deg, var(--primary-600), var(--primary-800));
@@ -545,6 +725,129 @@
                     </div>
                         </div>
                         
+                <!-- AI Health Diagnosis Section -->
+                <div id="ai-health-card" class="result-card animate-slide-up ai-health-card" style="animation-delay: 0.15s">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <div>
+                            <h3>AI Health Diagnosis</h3>
+                            <p style="margin: 0; color: var(--text-secondary); font-size: var(--text-sm);">Real-time health analysis and smart recommendations</p>
+                        </div>
+                    </div>
+                    <div class="ai-health-content" style="padding: var(--space-6);">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-4);">
+                            <div>
+                                <div style="font-size: var(--text-sm); color: var(--text-secondary); margin-bottom: var(--space-2);">Health Score</div>
+                                <div style="font-size: 2.5rem; font-weight: 700; line-height: 1;">
+                                    <span id="health-score-value">--</span>
+                                </div>
+                            </div>
+                            <div id="health-status-badge" class="health-status-badge unknown" style="padding: var(--space-3) var(--space-6); border-radius: var(--radius-full); font-weight: 600; font-size: var(--text-lg);">
+                                Analyzing...
+                            </div>
+                        </div>
+                        <div style="padding: var(--space-4); background: rgba(0, 0, 0, 0.05); border-radius: var(--radius-lg); border-left: 4px solid currentColor;">
+                            <div style="font-size: var(--text-sm); color: var(--text-secondary); margin-bottom: var(--space-2); font-weight: 600;">💡 Smart Recommendation</div>
+                            <div id="health-recommendation" style="font-size: var(--text-base); line-height: 1.6; color: var(--text-primary);">
+                                Analyzing device metrics...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                        
+                <!-- Live Performance Monitor Section -->
+                <div class="result-card animate-slide-up live-monitor-card" style="animation-delay: 0.18s">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <i class="fas fa-tachometer-alt"></i>
+                        </div>
+                        <div style="flex: 1;">
+                            <h3>Live Performance Monitor</h3>
+                            <p style="margin: 0; color: var(--text-secondary); font-size: var(--text-sm);">Real-time performance metrics and responsiveness</p>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: var(--space-2);">
+                            <span id="live-monitor-status" class="live-dot" style="display: none;"></span>
+                            <button id="toggle-monitor-btn" class="btn btn-primary" style="padding: var(--space-2) var(--space-4); font-size: var(--text-sm);">
+                                <i class="fas fa-play"></i> Start Live Monitor
+                            </button>
+                        </div>
+                    </div>
+                    <div id="live-monitor-content" style="display: none; padding: var(--space-6);">
+                        <div class="gauges-grid">
+                            <!-- Battery Gauge -->
+                            <div class="gauge-container">
+                                <div class="gauge-header">
+                                    <span class="gauge-label">Battery Level</span>
+                                    <span id="battery-gauge-last-update" class="gauge-update-time"></span>
+                                </div>
+                                <div class="gauge-wrapper">
+                                    <svg class="gauge-svg" viewBox="0 0 200 120">
+                                        <defs>
+                                            <linearGradient id="batteryGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                                <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
+                                                <stop offset="70%" style="stop-color:#f59e0b;stop-opacity:1" />
+                                                <stop offset="90%" style="stop-color:#ef4444;stop-opacity:1" />
+                                            </linearGradient>
+                                        </defs>
+                                        <path class="gauge-track" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#e5e7eb" stroke-width="12"/>
+                                        <path id="battery-gauge-arc" class="gauge-arc" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#batteryGradient)" stroke-width="12" stroke-linecap="round"/>
+                                        <text id="battery-gauge-value" class="gauge-value" x="100" y="75" text-anchor="middle" font-size="24" font-weight="700" fill="var(--text-primary)">--%</text>
+                                        <text class="gauge-label-text" x="100" y="95" text-anchor="middle" font-size="12" fill="var(--text-secondary)">Battery</text>
+                                    </svg>
+                                </div>
+                            </div>
+                            
+                            <!-- Storage Gauge -->
+                            <div class="gauge-container">
+                                <div class="gauge-header">
+                                    <span class="gauge-label">Storage Usage</span>
+                                    <span id="storage-gauge-last-update" class="gauge-update-time"></span>
+                                </div>
+                                <div class="gauge-wrapper">
+                                    <svg class="gauge-svg" viewBox="0 0 200 120">
+                                        <defs>
+                                            <linearGradient id="storageGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                                <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
+                                                <stop offset="70%" style="stop-color:#f59e0b;stop-opacity:1" />
+                                                <stop offset="90%" style="stop-color:#ef4444;stop-opacity:1" />
+                                            </linearGradient>
+                                        </defs>
+                                        <path class="gauge-track" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#e5e7eb" stroke-width="12"/>
+                                        <path id="storage-gauge-arc" class="gauge-arc" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#storageGradient)" stroke-width="12" stroke-linecap="round"/>
+                                        <text id="storage-gauge-value" class="gauge-value" x="100" y="75" text-anchor="middle" font-size="24" font-weight="700" fill="var(--text-primary)">--%</text>
+                                        <text class="gauge-label-text" x="100" y="95" text-anchor="middle" font-size="12" fill="var(--text-secondary)">Storage</text>
+                                    </svg>
+                                </div>
+                            </div>
+                            
+                            <!-- Responsiveness Gauge -->
+                            <div class="gauge-container">
+                                <div class="gauge-header">
+                                    <span class="gauge-label">Responsiveness</span>
+                                    <span id="responsiveness-gauge-last-update" class="gauge-update-time"></span>
+                                </div>
+                                <div class="gauge-wrapper">
+                                    <svg class="gauge-svg" viewBox="0 0 200 120">
+                                        <defs>
+                                            <linearGradient id="responsivenessGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                                <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
+                                                <stop offset="70%" style="stop-color:#f59e0b;stop-opacity:1" />
+                                                <stop offset="90%" style="stop-color:#ef4444;stop-opacity:1" />
+                                            </linearGradient>
+                                        </defs>
+                                        <path class="gauge-track" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#e5e7eb" stroke-width="12"/>
+                                        <path id="responsiveness-gauge-arc" class="gauge-arc" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#responsivenessGradient)" stroke-width="12" stroke-linecap="round"/>
+                                        <text id="responsiveness-gauge-value" class="gauge-value" x="100" y="75" text-anchor="middle" font-size="24" font-weight="700" fill="var(--text-primary)">--</text>
+                                        <text class="gauge-label-text" x="100" y="95" text-anchor="middle" font-size="12" fill="var(--text-secondary)">Index</text>
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                        
                 <div class="result-card animate-slide-up" style="animation-delay: 0.2s">
                     <div class="card-header">
                         <div class="card-icon">
@@ -656,10 +959,16 @@
                 </button>
                 {% endif %}
                 {% if session_id %}
-                <a href="/api/download-report/{{ session_id }}" class="btn btn-secondary" download>
-                    <i class="fas fa-download"></i>
-                    Download Report (PDF)
-                </a>
+                <div style="display: flex; gap: var(--space-3); flex-wrap: wrap;">
+                    <a href="/api/download-health-report/{{ session_id }}" class="btn btn-secondary" download id="download-health-report-btn">
+                        <i class="fas fa-file-pdf"></i>
+                        Download Health Report (PDF)
+                    </a>
+                    <button class="btn btn-primary" id="share-report-btn" onclick="shareReport()">
+                        <i class="fas fa-share-alt"></i>
+                        Share Report
+                    </button>
+                </div>
                 {% else %}
                 <button class="btn btn-secondary" onclick="downloadResults()">
                     <i class="fas fa-download"></i>
@@ -672,6 +981,7 @@
 
 
     <!-- Template Data -->
+    <script src="{{ url_for('static', filename='js/smart_diagnosis.js') }}"></script>
     <script type="application/json" id="template-data">
         {
             "phoneInfo": {{ phone_info | tojson | safe }},
@@ -1030,6 +1340,16 @@
                         updateStateChip('snapshot');
                         hasReceivedSnapshot = true;
                         recomputePerformanceScore(data.snapshot);
+                        
+                        // Update gauges if monitor is active
+                        if (monitorActive) {
+                            updateAllGauges();
+                        }
+                        
+                        // Update AI Health Diagnosis
+                        if (window.SmartDiagnosis && window.SmartDiagnosis.updateSmartDiagnosis) {
+                            window.SmartDiagnosis.updateSmartDiagnosis(data.snapshot);
+                        }
                         console.log('[DASHBOARD] Snapshot loaded:', data.snapshot);
                     }
                     if (data.live) {
@@ -1037,11 +1357,16 @@
                         updateBatteryWidget(data.live, true);
                         // Update snapshot battery if we have snapshot
                         if (currentSnapshot) {
+                            // Update battery in snapshot for AI diagnosis
                             currentSnapshot.battery = {
                                 level: data.live.level,
                                 charging: data.live.charging
                             };
                             recomputePerformanceScore(currentSnapshot);
+                            // Update AI Health Diagnosis with live battery data
+                            if (window.SmartDiagnosis && window.SmartDiagnosis.updateSmartDiagnosis) {
+                                window.SmartDiagnosis.updateSmartDiagnosis(currentSnapshot);
+                            }
                         }
                         console.log('[DASHBOARD] Live data loaded:', data.live);
                     }
@@ -1090,6 +1415,16 @@
                         updateDeviceInfoTable(currentSnapshot);
                         updateBatteryWidget(currentSnapshot, false);
                         recomputePerformanceScore(currentSnapshot);
+                        
+                        // Update gauges if monitor is active
+                        if (monitorActive) {
+                            updateAllGauges();
+                        }
+                        
+                        // Update AI Health Diagnosis
+                        if (window.SmartDiagnosis && window.SmartDiagnosis.updateSmartDiagnosis) {
+                            window.SmartDiagnosis.updateSmartDiagnosis(currentSnapshot);
+                        }
                         if (!hasReceivedSnapshot) {
                             updateStateChip('snapshot');
                             hasReceivedSnapshot = true;
@@ -1107,6 +1442,16 @@
                                 charging: data.data.charging
                             };
                             recomputePerformanceScore(currentSnapshot);
+                            
+                            // Update Battery Gauge if monitor is active
+                            if (monitorActive) {
+                                updateGauge('battery', data.data.level);
+                            }
+                            
+                            // Update AI Health Diagnosis with new battery data
+                            if (window.SmartDiagnosis && window.SmartDiagnosis.updateSmartDiagnosis) {
+                                window.SmartDiagnosis.updateSmartDiagnosis(currentSnapshot);
+                            }
                         }
                     }
                 } catch (error) {
@@ -1125,7 +1470,303 @@
         }
             
             // QR Code Generation
+        // Live Performance Monitor
+        let monitorActive = false;
+        let gaugeUpdateInterval = null;
+        let storageUpdateInterval = null;
+        let responsivenessTestInterval = null;
+        let lastResponsivenessIndex = 50; // Default value
+
+        // Update gauge arc based on percentage
+        function updateGauge(gaugeId, value, isResponsiveness = false) {
+            const arc = document.getElementById(`${gaugeId}-gauge-arc`);
+            const valueText = document.getElementById(`${gaugeId}-gauge-value`);
+            const updateTime = document.getElementById(`${gaugeId}-gauge-last-update`);
+            
+            if (!arc || !valueText) return;
+            
+            // Clamp value to 0-100
+            const clampedValue = Math.max(0, Math.min(100, value));
+            
+            // Calculate stroke-dashoffset (251.2 is the circumference of the arc)
+            const circumference = 251.2;
+            const offset = circumference - (clampedValue / 100) * circumference;
+            arc.style.strokeDashoffset = offset;
+            
+            // Update text
+            if (isResponsiveness) {
+                valueText.textContent = Math.round(clampedValue);
+            } else {
+                valueText.textContent = `${Math.round(clampedValue)}%`;
+            }
+            
+            // Update color based on value
+            arc.classList.remove('green', 'yellow', 'red');
+            if (clampedValue < 70) {
+                arc.classList.add('green');
+            } else if (clampedValue < 90) {
+                arc.classList.add('yellow');
+            } else {
+                arc.classList.add('red');
+            }
+            
+            // Update timestamp
+            if (updateTime) {
+                const now = new Date();
+                updateTime.textContent = now.toLocaleTimeString();
+            }
+        }
+
+        // Responsiveness test: measure time to perform ~10M no-op operations
+        function measureResponsiveness() {
+            const iterations = 10000000; // 10 million
+            const startTime = performance.now();
+            
+            // Simple no-op loop
+            for (let i = 0; i < iterations; i++) {
+                // No-op
+            }
+            
+            const endTime = performance.now();
+            const duration = endTime - startTime;
+            
+            // Normalize to 0-100 index (lower duration = higher score)
+            // Baseline: 100ms = 100 points, 1000ms = 0 points
+            // Formula: 100 - (duration / 10), clamped to 0-100
+            let index = 100 - (duration / 10);
+            index = Math.max(0, Math.min(100, index));
+            
+            // Factor in hardwareConcurrency if available
+            if (currentSnapshot && currentSnapshot.hardwareConcurrency) {
+                const cores = currentSnapshot.hardwareConcurrency;
+                // Bonus for more cores: up to +20 points for 8+ cores
+                const coreBonus = Math.min(20, (cores / 8) * 20);
+                index = Math.min(100, index + coreBonus);
+            }
+            
+            lastResponsivenessIndex = index;
+            updateGauge('responsiveness', index, true);
+            
+            console.log('[MONITOR] Responsiveness test:', {
+                duration: `${duration.toFixed(2)}ms`,
+                index: Math.round(index)
+            });
+            
+            return index;
+        }
+
+        // Update all gauges from current snapshot
+        function updateAllGauges() {
+            if (!currentSnapshot) return;
+            
+            // Update Battery Gauge
+            if (currentSnapshot.battery && currentSnapshot.battery.level !== undefined) {
+                updateGauge('battery', currentSnapshot.battery.level);
+            }
+            
+            // Update Storage Gauge
+            if (currentSnapshot.storage) {
+                let usagePercent = 0;
+                if (currentSnapshot.storage.storageSandboxUsagePercent !== undefined) {
+                    usagePercent = currentSnapshot.storage.storageSandboxUsagePercent;
+                } else if (currentSnapshot.storage.quota && currentSnapshot.storage.usage) {
+                    const quota = parseFloat(currentSnapshot.storage.quota);
+                    const usage = parseFloat(currentSnapshot.storage.usage);
+                    if (!isNaN(quota) && !isNaN(usage) && quota > 0) {
+                        usagePercent = (usage / quota) * 100;
+                    }
+                }
+                if (usagePercent > 0) {
+                    updateGauge('storage', usagePercent);
+                } else {
+                    // Show "Not exposed by browser" in gauge
+                    const valueText = document.getElementById('storage-gauge-value');
+                    if (valueText) {
+                        valueText.textContent = 'N/A';
+                    }
+                }
+            }
+            
+            // Responsiveness is updated separately via test
+        }
+
+        // Start Live Monitor
+        function startLiveMonitor() {
+            if (monitorActive) return;
+            
+            monitorActive = true;
+            const btn = document.getElementById('toggle-monitor-btn');
+            const content = document.getElementById('live-monitor-content');
+            const status = document.getElementById('live-monitor-status');
+            
+            if (btn) {
+                btn.innerHTML = '<i class="fas fa-stop"></i> Stop Live Monitor';
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-danger');
+            }
+            if (content) {
+                content.style.display = 'block';
+            }
+            if (status) {
+                status.style.display = 'inline-block';
+            }
+            
+            // Initial update
+            updateAllGauges();
+            measureResponsiveness();
+            
+            // Update all gauges every 2 seconds
+            gaugeUpdateInterval = setInterval(() => {
+                updateAllGauges();
+            }, 2000);
+            
+            // Update storage gauge every 12 seconds (10-15s range)
+            storageUpdateInterval = setInterval(() => {
+                if (currentSnapshot && currentSnapshot.storage) {
+                    // Re-fetch storage estimate if possible
+                    if (navigator.storage && navigator.storage.estimate) {
+                        navigator.storage.estimate().then(estimate => {
+                            if (currentSnapshot) {
+                                const quotaMB = Math.round((estimate.quota || 0) / (1024 * 1024));
+                                const usageMB = Math.round((estimate.usage || 0) / (1024 * 1024));
+                                const usagePercent = quotaMB > 0 ? Math.round((usageMB / quotaMB) * 100) : 0;
+                                
+                                if (!currentSnapshot.storage) {
+                                    currentSnapshot.storage = {};
+                                }
+                                currentSnapshot.storage.storageSandboxUsagePercent = usagePercent;
+                                currentSnapshot.storage.storageSandboxQuotaMB = quotaMB;
+                                currentSnapshot.storage.storageSandboxUsedMB = usageMB;
+                                
+                                updateGauge('storage', usagePercent);
+                                
+                                // Update AI Health Diagnosis
+                                if (window.SmartDiagnosis && window.SmartDiagnosis.updateSmartDiagnosis) {
+                                    window.SmartDiagnosis.updateSmartDiagnosis(currentSnapshot);
+                                }
+                            }
+                        }).catch(err => {
+                            console.warn('[MONITOR] Storage estimate failed:', err);
+                        });
+                    }
+                }
+            }, 12000);
+            
+            // Run responsiveness test every 5 seconds
+            responsivenessTestInterval = setInterval(() => {
+                const index = measureResponsiveness();
+                
+                // Update AI Health Diagnosis with new responsiveness
+                if (currentSnapshot && window.SmartDiagnosis && window.SmartDiagnosis.updateSmartDiagnosis) {
+                    // Add responsiveness to snapshot temporarily for diagnosis
+                    if (!currentSnapshot.responsiveness) {
+                        currentSnapshot.responsiveness = {};
+                    }
+                    currentSnapshot.responsiveness.index = index;
+                    window.SmartDiagnosis.updateSmartDiagnosis(currentSnapshot);
+                }
+            }, 5000);
+            
+            console.log('[MONITOR] Live monitor started');
+        }
+
+        // Stop Live Monitor
+        function stopLiveMonitor() {
+            if (!monitorActive) return;
+            
+            monitorActive = false;
+            const btn = document.getElementById('toggle-monitor-btn');
+            const status = document.getElementById('live-monitor-status');
+            
+            if (btn) {
+                btn.innerHTML = '<i class="fas fa-play"></i> Start Live Monitor';
+                btn.classList.remove('btn-danger');
+                btn.classList.add('btn-primary');
+            }
+            if (status) {
+                status.style.display = 'none';
+            }
+            
+            // Clear all intervals
+            if (gaugeUpdateInterval) {
+                clearInterval(gaugeUpdateInterval);
+                gaugeUpdateInterval = null;
+            }
+            if (storageUpdateInterval) {
+                clearInterval(storageUpdateInterval);
+                storageUpdateInterval = null;
+            }
+            if (responsivenessTestInterval) {
+                clearInterval(responsivenessTestInterval);
+                responsivenessTestInterval = null;
+            }
+            
+            console.log('[MONITOR] Live monitor stopped');
+        }
+
+        // Toggle Live Monitor
+        function toggleLiveMonitor() {
+            if (monitorActive) {
+                stopLiveMonitor();
+            } else {
+                startLiveMonitor();
+            }
+        }
+
+        // Share Report function
+        async function shareReport() {
+            if (!sessionId) {
+                showToast('No session ID available', 'error');
+                return;
+            }
+            
+            const btn = document.getElementById('share-report-btn');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+            }
+            
+            try {
+                const response = await fetch(`/api/share-report/${sessionId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Copy to clipboard
+                    await navigator.clipboard.writeText(data.share_url);
+                    showToast('Share link copied to clipboard!', 'success');
+                    
+                    // Show share URL in a prompt
+                    const expiresAt = new Date(data.expires_at);
+                    const message = `Share link created!\n\nURL: ${data.share_url}\nExpires: ${expiresAt.toLocaleString()}\n\nLink copied to clipboard.`;
+                    alert(message);
+                } else {
+                    throw new Error(data.error || 'Failed to create share link');
+                }
+            } catch (error) {
+                console.error('[SHARE] Error:', error);
+                showToast(`Failed to create share link: ${error.message}`, 'error');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-share-alt"></i> Share Report';
+                }
+            }
+        }
+        
+        // Make shareReport globally available
+        window.shareReport = shareReport;
+
         document.addEventListener('DOMContentLoaded', function() {
+            // Setup Live Monitor toggle button
+            const toggleBtn = document.getElementById('toggle-monitor-btn');
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', toggleLiveMonitor);
+            }
+            
             const generateQRBtn = document.getElementById('generateQRBtn');
             if (generateQRBtn) {
                 generateQRBtn.addEventListener('click', async function() {

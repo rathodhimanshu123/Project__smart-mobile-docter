@@ -167,11 +167,51 @@ class SessionStore:
 # Global session store
 session_store = SessionStore(ttl_minutes=30)
 
+# Share token store: { token: { session_id: str, expires_at: datetime } }
+share_tokens = {}
+share_tokens_lock = threading.Lock()
+
+def generate_share_token():
+    """Generate a random share token"""
+    return uuid.uuid4().hex[:16]  # 16 character token
+
+def create_share_token(session_id):
+    """Create a share token for a session (24 hour expiry)"""
+    token = generate_share_token()
+    expires_at = datetime.now() + timedelta(hours=24)
+    with share_tokens_lock:
+        share_tokens[token] = {
+            'session_id': session_id,
+            'expires_at': expires_at
+        }
+    return token
+
+def get_share_token(token):
+    """Get session_id for a share token if valid"""
+    with share_tokens_lock:
+        if token in share_tokens:
+            token_data = share_tokens[token]
+            if datetime.now() < token_data['expires_at']:
+                return token_data['session_id']
+            else:
+                # Expired, remove it
+                del share_tokens[token]
+    return None
+
+def cleanup_expired_share_tokens():
+    """Remove expired share tokens"""
+    now = datetime.now()
+    with share_tokens_lock:
+        expired = [token for token, data in share_tokens.items() if now >= data['expires_at']]
+        for token in expired:
+            del share_tokens[token]
+
 # Cleanup thread
 def cleanup_worker():
     while True:
         time.sleep(300)  # Run every 5 minutes
         session_store.cleanup_expired()
+        cleanup_expired_share_tokens()
 
 cleanup_thread = threading.Thread(target=cleanup_worker, daemon=True)
 cleanup_thread.start()
@@ -1046,15 +1086,17 @@ def check_phone_data(session_id):
             return jsonify({'available': True, 'data': json.load(f)})
     return jsonify({'available': False})
 
-@app.route('/api/download-report/<session_id>')
-def download_report(session_id):
-    """Generate and download PDF report"""
+@app.route('/api/download-health-report/<session_id>')
+def download_health_report(session_id):
+    """Generate and download comprehensive health report PDF"""
     try:
         from reportlab.lib.pagesizes import letter
         from reportlab.lib import colors
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, Image
         from reportlab.lib.units import inch
+        from reportlab.graphics.shapes import Drawing
+        from reportlab.graphics.charts.piecharts import Pie
     except ImportError:
         # Fallback to JSON if reportlab not available
         sess = session_store.get_session(session_id)
@@ -1075,88 +1117,297 @@ def download_report(session_id):
             'data': data
         }, indent=2))
         response.headers['Content-Type'] = 'application/json'
-        response.headers['Content-Disposition'] = f'attachment; filename=device-report-{session_id}.json'
+        response.headers['Content-Disposition'] = f'attachment; filename=health-report-{session_id}.json'
         return response
     
-    # Generate PDF
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter)
-    story = []
-    styles = getSampleStyleSheet()
-    
-    # Title
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=24,
-        textColor=colors.HexColor('#1a1a1a'),
-        spaceAfter=30,
-    )
-    story.append(Paragraph("Device Analysis Report", title_style))
-    story.append(Spacer(1, 0.2*inch))
-    
-    # Session info
-    story.append(Paragraph(f"<b>Session ID:</b> {session_id}", styles['Normal']))
-    story.append(Paragraph(f"<b>Generated:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
-    story.append(Spacer(1, 0.3*inch))
-    
-    # Get data
+    # Get session data
     sess = session_store.get_session(session_id)
-    if sess and sess.get('snapshot'):
-        data = sess['snapshot']
+    snapshot = None
+    live_data = None
+    
+    if sess:
+        snapshot = sess.get('snapshot', {})
+        live_data = sess.get('live', {})
+        created_at = sess.get('createdAt', datetime.now())
     else:
+        # Try file for backward compatibility
         data_file = os.path.join('static', 'phone_data', f"{session_id}.json")
         if os.path.exists(data_file):
             with open(data_file, 'r') as f:
-                data = json.load(f)
+                snapshot = json.load(f)
         else:
             return jsonify({'error': 'Session not found'}), 404
+        created_at = datetime.now()
+    
+    # Use live battery if available, otherwise snapshot
+    battery_level = None
+    battery_charging = False
+    battery_last_update = None
+    
+    if live_data and live_data.get('level') is not None:
+        battery_level = live_data.get('level')
+        battery_charging = live_data.get('charging', False)
+        ts = live_data.get('ts')
+        if ts:
+            if isinstance(ts, (int, float)):
+                battery_last_update = datetime.fromtimestamp(ts / 1000) if ts > 1e10 else datetime.fromtimestamp(ts)
+            else:
+                battery_last_update = ts
+        else:
+            battery_last_update = created_at
+    elif snapshot and snapshot.get('battery'):
+        battery_data = snapshot.get('battery', {})
+        battery_level = battery_data.get('level')
+        battery_charging = battery_data.get('charging', False)
+        battery_last_update = created_at
+    
+    # Compute AI Health Score
+    health_score = 50
+    health_status = "Unknown"
+    health_recommendation = "Analyzing device metrics..."
+    
+    # Calculate health score (simplified version of smart_diagnosis.js logic)
+    if snapshot:
+        score = 0
+        # Battery: 40%
+        if battery_level is not None:
+            score += (battery_level / 100) * 40
+        else:
+            score += 20
+        
+        # RAM: 30% (simplified)
+        if snapshot.get('deviceMemory'):
+            ram_gb = parse_numeric(snapshot.get('deviceMemory'))
+            if ram_gb >= 8:
+                score += 30
+            elif ram_gb >= 6:
+                score += 25
+            elif ram_gb >= 4:
+                score += 20
+            else:
+                score += 15
+        else:
+            score += 15
+        
+        # Storage: 20%
+        if snapshot.get('storage'):
+            storage = snapshot.get('storage', {})
+            usage_percent = 0
+            if storage.get('storageSandboxUsagePercent') is not None:
+                usage_percent = storage.get('storageSandboxUsagePercent')
+            elif storage.get('quota') and storage.get('usage'):
+                quota = float(storage.get('quota', 0))
+                usage = float(storage.get('usage', 0))
+                if quota > 0:
+                    usage_percent = (usage / quota) * 100
+            
+            if usage_percent > 0:
+                free_pct = 100 - usage_percent
+                score += 20 * (free_pct / 100)
+            else:
+                score += 10
+        else:
+            score += 10
+        
+        # Charging bonus: 10%
+        if battery_charging:
+            score += 10
+        
+        health_score = max(0, min(100, round(score)))
+        
+        # Determine status
+        if health_score >= 80:
+            health_status = "Excellent"
+        elif health_score >= 60:
+            health_status = "Good"
+        elif health_score >= 40:
+            health_status = "Moderate"
+        else:
+            health_status = "Critical"
+        
+        # Generate recommendation
+        recommendations = []
+        if battery_level is not None and battery_level < 20:
+            recommendations.append("Plug in your charger immediately.")
+        elif battery_level is not None and battery_level < 40:
+            recommendations.append("Consider plugging in your charger soon.")
+        
+        if snapshot.get('storage'):
+            storage = snapshot.get('storage', {})
+            usage_percent = 0
+            if storage.get('storageSandboxUsagePercent') is not None:
+                usage_percent = storage.get('storageSandboxUsagePercent')
+            elif storage.get('quota') and storage.get('usage'):
+                quota = float(storage.get('quota', 0))
+                usage = float(storage.get('usage', 0))
+                if quota > 0:
+                    usage_percent = (usage / quota) * 100
+            
+            if usage_percent > 80:
+                recommendations.append("Delete unused files to free up space.")
+            elif usage_percent > 60:
+                recommendations.append("Consider cleaning up storage space.")
+        
+        if snapshot.get('deviceMemory'):
+            ram_gb = parse_numeric(snapshot.get('deviceMemory'))
+            if ram_gb < 4:
+                recommendations.append("Close background apps to free up RAM.")
+        
+        if recommendations:
+            health_recommendation = " ".join(recommendations)
+        else:
+            health_recommendation = "Your device is performing well."
+    
+    # Get storage info
+    storage_usage = None
+    storage_quota = None
+    storage_usage_percent = None
+    if snapshot and snapshot.get('storage'):
+        storage = snapshot.get('storage', {})
+        if storage.get('storageSandboxUsedMB') is not None:
+            storage_usage = storage.get('storageSandboxUsedMB')
+            storage_quota = storage.get('storageSandboxQuotaMB')
+            storage_usage_percent = storage.get('storageSandboxUsagePercent')
+        elif storage.get('usage') and storage.get('quota'):
+            storage_usage = round(storage.get('usage', 0) / (1024 * 1024))
+            storage_quota = round(storage.get('quota', 0) / (1024 * 1024))
+            if storage_quota > 0:
+                storage_usage_percent = round((storage_usage / storage_quota) * 100)
+    
+    # Generate QR code for session
+    base_url = get_base_url()
+    qr_url = f"{base_url}/result?session_id={session_id}"
+    qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_H, box_size=4, border=2)
+    qr.add_data(qr_url)
+    qr.make(fit=True)
+    qr_img = qr.make_image(fill_color="black", back_color="white")
+    qr_buffer = io.BytesIO()
+    qr_img.save(qr_buffer, format='PNG')
+    qr_buffer.seek(0)
+    
+    # Generate PDF
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
+    story = []
+    styles = getSampleStyleSheet()
+    
+    # Cover Page
+    cover_title_style = ParagraphStyle(
+        'CoverTitle',
+        parent=styles['Heading1'],
+        fontSize=32,
+        textColor=colors.HexColor('#1a1a1a'),
+        spaceAfter=20,
+        alignment=1,  # Center
+    )
+    story.append(Spacer(1, 1.5*inch))
+    story.append(Paragraph("Smart Mobile Doctor", cover_title_style))
+    story.append(Paragraph("Health Report", ParagraphStyle('CoverSubtitle', parent=styles['Heading2'], fontSize=24, textColor=colors.HexColor('#666666'), alignment=1)))
+    story.append(Spacer(1, 0.5*inch))
+    
+    # Session info on cover
+    cover_info_style = ParagraphStyle('CoverInfo', parent=styles['Normal'], fontSize=11, textColor=colors.HexColor('#666666'), alignment=1)
+    story.append(Paragraph(f"Session ID: {session_id}", cover_info_style))
+    story.append(Paragraph(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", cover_info_style))
+    story.append(Spacer(1, 0.3*inch))
+    
+    # QR Code on cover
+    qr_img_pl = Image(qr_buffer, width=1.5*inch, height=1.5*inch)
+    story.append(qr_img_pl)
+    story.append(Spacer(1, 0.2*inch))
+    story.append(Paragraph("Scan to view live session", cover_info_style))
+    
+    story.append(PageBreak())
+    
+    # Summary Section
+    summary_style = ParagraphStyle('SummaryTitle', parent=styles['Heading1'], fontSize=20, textColor=colors.HexColor('#1a1a1a'), spaceAfter=15)
+    story.append(Paragraph("Executive Summary", summary_style))
+    story.append(Spacer(1, 0.2*inch))
+    
+    # Summary cards
+    summary_data = [
+        ['Metric', 'Value', 'Status'],
+        ['AI Health Score', f'{health_score}%', health_status],
+        ['Battery Level', f'{battery_level}%' if battery_level is not None else 'N/A', 'Charging' if battery_charging else 'Not Charging' if battery_level is not None else 'N/A'],
+        ['Storage Usage', f'{storage_usage_percent}%' if storage_usage_percent is not None else 'N/A', f'{storage_usage} MB / {storage_quota} MB' if storage_usage and storage_quota else 'N/A'],
+    ]
+    
+    summary_table = Table(summary_data, colWidths=[2*inch, 2*inch, 2.5*inch])
+    summary_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4a5568')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f7fafc')),
+        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#e2e8f0')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f7fafc')])
+    ]))
+    story.append(summary_table)
+    story.append(Spacer(1, 0.3*inch))
+    
+    # Smart Recommendation
+    story.append(Paragraph("<b>Smart Recommendation</b>", styles['Heading2']))
+    story.append(Spacer(1, 0.1*inch))
+    rec_style = ParagraphStyle('Recommendation', parent=styles['Normal'], fontSize=11, leftIndent=0.2*inch, textColor=colors.HexColor('#2d3748'))
+    story.append(Paragraph(health_recommendation, rec_style))
+    story.append(Spacer(1, 0.3*inch))
     
     # Device Information
     story.append(Paragraph("<b>Device Information</b>", styles['Heading2']))
     story.append(Spacer(1, 0.1*inch))
     
-    device_data = []
-    for key, value in data.items():
-        if key not in ['timestamp', 'source']:
+    device_data = [['Field', 'Value']]
+    for key, value in snapshot.items():
+        if key not in ['timestamp', 'source', 'battery', 'storage']:
             display_key = key.replace('_', ' ').title()
             if isinstance(value, dict):
-                value_str = json.dumps(value, indent=2)
+                value_str = json.dumps(value, indent=2)[:100] + '...' if len(json.dumps(value)) > 100 else json.dumps(value, indent=2)
             else:
                 value_str = str(value) if value is not None else "Not exposed by browser"
             device_data.append([display_key, value_str])
     
-    if device_data:
+    # Add battery info
+    if battery_level is not None:
+        device_data.append(['Battery Level', f'{battery_level}% ({"Charging" if battery_charging else "Not Charging"})'])
+        if battery_last_update:
+            if isinstance(battery_last_update, datetime):
+                device_data.append(['Battery Last Updated', battery_last_update.strftime('%Y-%m-%d %H:%M:%S')])
+            else:
+                device_data.append(['Battery Last Updated', str(battery_last_update)])
+    
+    # Add storage info
+    if storage_usage_percent is not None:
+        device_data.append(['Storage Usage', f'{storage_usage_percent}% ({storage_usage} MB used of {storage_quota} MB)'])
+        device_data.append(['Storage Type', 'Browser Sandbox'])
+    
+    if len(device_data) > 1:
         table = Table(device_data, colWidths=[2*inch, 4.5*inch])
         table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (0, -1), colors.grey),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4a5568')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 12),
+            ('FONTSIZE', (0, 0), (-1, 0), 11),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f7fafc')),
+            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#e2e8f0')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f7fafc')])
         ]))
         story.append(table)
     
     story.append(Spacer(1, 0.3*inch))
     
-    # Performance Score
-    perf_score = compute_performance_score(data)
-    perf_label, recommendations = get_performance_label_and_recommendations(perf_score, data)
-    
-    story.append(Paragraph("<b>Performance Score</b>", styles['Heading2']))
+    # Notes & Limitations
+    story.append(Paragraph("<b>Notes & Limitations</b>", styles['Heading2']))
     story.append(Spacer(1, 0.1*inch))
-    story.append(Paragraph(f"<b>Score:</b> {perf_score}% - {perf_label}", styles['Normal']))
-    story.append(Spacer(1, 0.2*inch))
-    
-    # Recommendations
-    story.append(Paragraph("<b>Recommendations</b>", styles['Heading2']))
-    story.append(Spacer(1, 0.1*inch))
-    for rec in recommendations:
-        story.append(Paragraph(f"• {rec}", styles['Normal']))
-        story.append(Spacer(1, 0.05*inch))
+    notes_style = ParagraphStyle('Notes', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#718096'), leftIndent=0.2*inch)
+    story.append(Paragraph("• Battery health (mAh/wear) is not available on web browsers. We show live battery level and charging status only.", notes_style))
+    story.append(Spacer(1, 0.05*inch))
+    story.append(Paragraph("• Storage information shows browser sandbox quota, not full device memory.", notes_style))
+    story.append(Spacer(1, 0.05*inch))
+    story.append(Paragraph("• Some metrics may not be available on all browsers or require HTTPS.", notes_style))
     
     doc.build(story)
     buffer.seek(0)
@@ -1165,8 +1416,205 @@ def download_report(session_id):
         buffer,
         mimetype='application/pdf',
         as_attachment=True,
-        download_name=f'device-report-{session_id}-{datetime.now().strftime("%Y%m%d")}.pdf'
+        download_name=f'health-report-{session_id}-{datetime.now().strftime("%Y%m%d")}.pdf'
     )
+
+@app.route('/api/share-report/<session_id>', methods=['POST'])
+def create_share_link(session_id):
+    """Create a shareable link for a session report"""
+    try:
+        # Verify session exists
+        sess = session_store.get_session(session_id)
+        if not sess:
+            # Try file for backward compatibility
+            data_file = os.path.join('static', 'phone_data', f"{session_id}.json")
+            if not os.path.exists(data_file):
+                return jsonify({'error': 'Session not found'}), 404
+        
+        # Create share token
+        token = create_share_token(session_id)
+        base_url = get_base_url()
+        share_url = f"{base_url}/share/{token}"
+        
+        # Get expiry time
+        with share_tokens_lock:
+            token_data = share_tokens.get(token)
+            expires_at = token_data['expires_at'] if token_data else datetime.now() + timedelta(hours=24)
+        
+        return jsonify({
+            'success': True,
+            'share_url': share_url,
+            'expires_at': expires_at.isoformat()
+        })
+    except Exception as e:
+        app.logger.error(f"Error creating share link: {str(e)}")
+        return jsonify({'error': f'Failed to create share link: {str(e)}'}), 500
+
+@app.route('/share/<token>')
+def share_view(token):
+    """Read-only view of a shared report"""
+    try:
+        # Get session_id from token
+        session_id = get_share_token(token)
+        if not session_id:
+            return render_template('share_expired.html'), 404
+        
+        # Get session data
+        sess = session_store.get_session(session_id)
+        snapshot = None
+        live_data = None
+        
+        if sess:
+            snapshot = sess.get('snapshot', {})
+            live_data = sess.get('live', {})
+            created_at = sess.get('createdAt', datetime.now())
+        else:
+            # Try file for backward compatibility
+            data_file = os.path.join('static', 'phone_data', f"{session_id}.json")
+            if os.path.exists(data_file):
+                with open(data_file, 'r') as f:
+                    snapshot = json.load(f)
+            else:
+                return render_template('share_expired.html'), 404
+            created_at = datetime.now()
+        
+        # Get expiry time
+        with share_tokens_lock:
+            token_data = share_tokens.get(token)
+            expires_at = token_data['expires_at'] if token_data else datetime.now() + timedelta(hours=24)
+        
+        # Use live battery if available
+        battery_level = None
+        battery_charging = False
+        if live_data and live_data.get('level') is not None:
+            battery_level = live_data.get('level')
+            battery_charging = live_data.get('charging', False)
+        elif snapshot and snapshot.get('battery'):
+            battery_data = snapshot.get('battery', {})
+            battery_level = battery_data.get('level')
+            battery_charging = battery_data.get('charging', False)
+        
+        # Compute health score (same logic as PDF)
+        health_score = 50
+        health_status = "Unknown"
+        health_recommendation = "Analyzing device metrics..."
+        
+        if snapshot:
+            score = 0
+            if battery_level is not None:
+                score += (battery_level / 100) * 40
+            else:
+                score += 20
+            
+            if snapshot.get('deviceMemory'):
+                ram_gb = parse_numeric(snapshot.get('deviceMemory'))
+                if ram_gb >= 8:
+                    score += 30
+                elif ram_gb >= 6:
+                    score += 25
+                elif ram_gb >= 4:
+                    score += 20
+                else:
+                    score += 15
+            else:
+                score += 15
+            
+            if snapshot.get('storage'):
+                storage = snapshot.get('storage', {})
+                usage_percent = 0
+                if storage.get('storageSandboxUsagePercent') is not None:
+                    usage_percent = storage.get('storageSandboxUsagePercent')
+                elif storage.get('quota') and storage.get('usage'):
+                    quota = float(storage.get('quota', 0))
+                    usage = float(storage.get('usage', 0))
+                    if quota > 0:
+                        usage_percent = (usage / quota) * 100
+                
+                if usage_percent > 0:
+                    free_pct = 100 - usage_percent
+                    score += 20 * (free_pct / 100)
+                else:
+                    score += 10
+            else:
+                score += 10
+            
+            if battery_charging:
+                score += 10
+            
+            health_score = max(0, min(100, round(score)))
+            
+            if health_score >= 80:
+                health_status = "Excellent"
+            elif health_score >= 60:
+                health_status = "Good"
+            elif health_score >= 40:
+                health_status = "Moderate"
+            else:
+                health_status = "Critical"
+            
+            recommendations = []
+            if battery_level is not None and battery_level < 20:
+                recommendations.append("Plug in your charger immediately.")
+            elif battery_level is not None and battery_level < 40:
+                recommendations.append("Consider plugging in your charger soon.")
+            
+            if snapshot.get('storage'):
+                storage = snapshot.get('storage', {})
+                usage_percent = 0
+                if storage.get('storageSandboxUsagePercent') is not None:
+                    usage_percent = storage.get('storageSandboxUsagePercent')
+                elif storage.get('quota') and storage.get('usage'):
+                    quota = float(storage.get('quota', 0))
+                    usage = float(storage.get('usage', 0))
+                    if quota > 0:
+                        usage_percent = (usage / quota) * 100
+                
+                if usage_percent > 80:
+                    recommendations.append("Delete unused files to free up space.")
+                elif usage_percent > 60:
+                    recommendations.append("Consider cleaning up storage space.")
+            
+            if snapshot.get('deviceMemory'):
+                ram_gb = parse_numeric(snapshot.get('deviceMemory'))
+                if ram_gb < 4:
+                    recommendations.append("Close background apps to free up RAM.")
+            
+            if recommendations:
+                health_recommendation = " ".join(recommendations)
+            else:
+                health_recommendation = "Your device is performing well."
+        
+        # Get storage info
+        storage_usage = None
+        storage_quota = None
+        storage_usage_percent = None
+        if snapshot and snapshot.get('storage'):
+            storage = snapshot.get('storage', {})
+            if storage.get('storageSandboxUsedMB') is not None:
+                storage_usage = storage.get('storageSandboxUsedMB')
+                storage_quota = storage.get('storageSandboxQuotaMB')
+                storage_usage_percent = storage.get('storageSandboxUsagePercent')
+            elif storage.get('usage') and storage.get('quota'):
+                storage_usage = round(storage.get('usage', 0) / (1024 * 1024))
+                storage_quota = round(storage.get('quota', 0) / (1024 * 1024))
+                if storage_quota > 0:
+                    storage_usage_percent = round((storage_usage / storage_quota) * 100)
+        
+        return render_template('share_view.html',
+                             session_id=session_id,
+                             snapshot=snapshot,
+                             battery_level=battery_level,
+                             battery_charging=battery_charging,
+                             health_score=health_score,
+                             health_status=health_status,
+                             health_recommendation=health_recommendation,
+                             storage_usage=storage_usage,
+                             storage_quota=storage_quota,
+                             storage_usage_percent=storage_usage_percent,
+                             expires_at=expires_at)
+    except Exception as e:
+        app.logger.error(f"Error rendering share view: {str(e)}")
+        return render_template('share_expired.html'), 500
 
 @app.route('/debug')
 def debug_page():
