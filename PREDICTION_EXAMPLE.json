@@ -1,0 +1,35 @@
+{
+  "success": true,
+  "prediction": {
+    "status": "success",
+    "last_recompute": "2024-01-15T10:30:00.123456",
+    "days_projected": 30,
+    "time_series": {
+      "battery": [85, 84.2, 83.4, 82.6, 81.8, 81.0, 80.2, 79.4, 78.6, 77.8, 77.0, 76.2, 75.4, 74.6, 73.8, 73.0, 72.2, 71.4, 70.6, 69.8, 69.0, 68.2, 67.4, 66.6, 65.8, 65.0, 64.2, 63.4, 62.6, 61.8],
+      "storage": [45, 45.5, 46.0, 46.5, 47.0, 47.5, 48.0, 48.5, 49.0, 49.5, 50.0, 50.5, 51.0, 51.5, 52.0, 52.5, 53.0, 53.5, 54.0, 54.5, 55.0, 55.5, 56.0, 56.5, 57.0, 57.5, 58.0, 58.5, 59.0, 59.5],
+      "responsiveness": [75, 74.8, 74.6, 74.4, 74.2, 74.0, 73.8, 73.6, 73.4, 73.2, 73.0, 72.8, 72.6, 72.4, 72.2, 72.0, 71.8, 71.6, 71.4, 71.2, 71.0, 70.8, 70.6, 70.4, 70.2, 70.0, 69.8, 69.6, 69.4, 69.2]
+    },
+    "key_dates": {
+      "battery_80": "2024-01-16T10:30:00",
+      "battery_50": "2024-01-25T10:30:00",
+      "battery_20": "2024-02-05T10:30:00",
+      "storage_80": "2024-02-20T10:30:00"
+    },
+    "risk_scores": {
+      "thermal_stress": 25.5,
+      "battery_drain_rate": -0.8,
+      "storage_growth_rate": 0.5
+    },
+    "health_score_30_day": 72.5,
+    "recommendations": [
+      "✅ Device health projections look stable. Continue regular maintenance."
+    ],
+    "stress_factors": [],
+    "current_values": {
+      "battery": 85.0,
+      "storage": 45.0,
+      "responsiveness": 75.0
+    }
+  }
+}
+

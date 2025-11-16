@@ -130,3 +130,24 @@
 .secondary-button:hover {
     background-color: var(--secondary-200);
 }
+
+/* Prediction Chart Styles */
+.prediction-chart-container {
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
+    max-height: 350px;
+    overflow: hidden;
+}
+
+.prediction-chart {
+    width: 100% !important;
+    height: 280px !important;
+    max-height: 320px;
+}
+
+@media (max-width: 600px) {
+    .prediction-chart {
+        height: 220px !important;
+    }
+}

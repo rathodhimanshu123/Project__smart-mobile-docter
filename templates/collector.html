@@ -246,7 +246,7 @@
                 Full battery health would require a future add-on via a tiny Android native collector that posts to the same session.
             </div>
             <div class="battery-note" id="storage-note" style="display: none;">
-                <strong>ℹ️ Note:</strong> This shows browser sandbox storage, not full device memory.
+                <strong>ℹ️ Note:</strong> This shows browser sandbox storage (not full device storage). Last updated: <span id="storage-last-updated">--</span>
             </div>
         </div>
     </div>
@@ -276,6 +276,40 @@
 
         // Check if secure context
         const isSecure = window.location.protocol === 'https:';
+        const insecureContext = !isSecure;
+
+        // Helper functions
+        function bytesToMB(bytes) {
+            if (!bytes || bytes === 0) return 0;
+            return Math.round(bytes / (1024 * 1024));
+        }
+
+        function safeEstimateStorage() {
+            return new Promise((resolve) => {
+                if (!isSecure || !navigator.storage || !navigator.storage.estimate) {
+                    resolve(null);
+                    return;
+                }
+                navigator.storage.estimate().then(estimate => {
+                    const quotaMB = bytesToMB(estimate.quota || 0);
+                    const usageMB = bytesToMB(estimate.usage || 0);
+                    const usagePercent = quotaMB > 0 ? Math.round((usageMB / quotaMB) * 100) : 0;
+                    resolve({
+                        storageSandboxUsedMB: usageMB,
+                        storageSandboxQuotaMB: quotaMB,
+                        storageSandboxUsagePercent: usagePercent,
+                        storageSource: "browser-sandbox",
+                        // Keep raw values for backward compatibility
+                        quota: estimate.quota,
+                        usage: estimate.usage,
+                        usageDetails: estimate.usageDetails || null
+                    });
+                }).catch(err => {
+                    console.warn('[COLLECTOR] Storage estimate failed:', err);
+                    resolve(null);
+                });
+            });
+        }
 
         // Helper to get reason for missing data
         function getReason(key, value) {
@@ -378,40 +412,45 @@
                         chargingTime: batteryManager.chargingTime,
                         dischargingTime: batteryManager.dischargingTime
                     };
+                    // Add battery fields to snapshot for /api/collect
+                    snapshot.batteryLevel = batteryLevel;
+                    snapshot.batteryCharging = batteryManager.charging;
+                    snapshot.insecureContext = insecureContext;
                     // Immediately POST initial battery reading
                     sendBatteryUpdate(batteryLevel, batteryManager.charging, true);
                     // Set up live battery listener
                     setupBatteryListener();
                 } else {
                     snapshot.battery = null;
+                    snapshot.batteryLevel = null;
+                    snapshot.batteryCharging = null;
+                    snapshot.insecureContext = insecureContext;
+                    console.log('[COLLECTOR] Battery API not available:', !isSecure ? 'Insecure context (HTTPS required)' : 'Not supported');
                 }
             } catch (e) {
+                console.warn('[COLLECTOR] Battery API error:', e);
                 snapshot.battery = null;
+                snapshot.batteryLevel = null;
+                snapshot.batteryCharging = null;
+                snapshot.insecureContext = insecureContext;
             }
 
             // Storage - browser sandbox (only in secure context)
             try {
-                if (isSecure && navigator.storage && navigator.storage.estimate) {
-                    const estimate = await navigator.storage.estimate();
-                    // Convert bytes to MB
-                    const quotaMB = Math.round((estimate.quota || 0) / (1024 * 1024));
-                    const usageMB = Math.round((estimate.usage || 0) / (1024 * 1024));
-                    const usagePercent = quotaMB > 0 ? Math.round((usageMB / quotaMB) * 100) : 0;
-                    
-                    snapshot.storage = {
-                        storageSandboxUsedMB: usageMB,
-                        storageSandboxQuotaMB: quotaMB,
-                        storageSandboxUsagePercent: usagePercent,
-                        storageSource: "browser sandbox",
-                        // Keep raw values for backward compatibility
-                        quota: estimate.quota,
-                        usage: estimate.usage,
-                        usageDetails: estimate.usageDetails || null
-                    };
+                const storageData = await safeEstimateStorage();
+                if (storageData) {
+                    snapshot.storage = storageData;
+                    console.log('[COLLECTOR] Storage collected:', {
+                        usedMB: storageData.storageSandboxUsedMB,
+                        quotaMB: storageData.storageSandboxQuotaMB,
+                        usagePercent: storageData.storageSandboxUsagePercent
+                    });
                 } else {
                     snapshot.storage = null;
+                    console.log('[COLLECTOR] Storage API not available:', !isSecure ? 'Insecure context (HTTPS required)' : 'Not supported');
                 }
             } catch (e) {
+                console.warn('[COLLECTOR] Storage API error:', e);
                 snapshot.storage = null;
             }
 
@@ -530,13 +569,13 @@
                 sendBatteryUpdate(level, batteryManager.charging, false);
             });
 
-            // Heartbeat: send every 30s
+            // Heartbeat: send every 15s for better minute-resolution predictions (10-30s range)
             batteryHeartbeatInterval = setInterval(() => {
                 if (batteryManager) {
                     const level = Math.round(batteryManager.level * 100);
                     sendBatteryUpdate(level, batteryManager.charging, true); // Force send for heartbeat
                 }
-            }, 30000);
+            }, 15000); // 15 seconds = good balance for 10-30s range
 
             // Final POST on visibility change (tab hidden/visible)
             document.addEventListener('visibilitychange', () => {
@@ -587,18 +626,18 @@
                     if (!v || v.level === undefined) return null;
                     return `${v.level}%${v.charging ? ' (Charging)' : ' (Not charging)'}`;
                 }},
-                { key: 'storage', label: 'Storage', format: (v) => {
+                { key: 'storage', label: 'Storage (Browser Sandbox)', format: (v) => {
                     if (!v) return null;
                     // Use new sandbox format if available
                     if (v.storageSandboxQuotaMB !== undefined && v.storageSandboxUsedMB !== undefined) {
-                        return `Browser Sandbox: ${v.storageSandboxUsedMB} MB used of ${v.storageSandboxQuotaMB} MB (${v.storageSandboxUsagePercent}%)`;
+                        return `Browser Sandbox: ${v.storageSandboxUsedMB} MB used of ${v.storageSandboxQuotaMB} MB (${v.storageSandboxUsagePercent}% used) - Not full device storage`;
                     }
                     // Fallback to old format
                     if (v.quota) {
                         const free = v.quota - v.usage;
                         const freeGB = (free / (1024 * 1024 * 1024)).toFixed(2);
                         const totalGB = (v.quota / (1024 * 1024 * 1024)).toFixed(2);
-                        return `${freeGB} GB free of ${totalGB} GB`;
+                        return `Browser Sandbox: ${freeGB} GB free of ${totalGB} GB - Not full device storage`;
                     }
                     return null;
                 }},
@@ -633,8 +672,13 @@
             });
 
             // Show storage note if storage data is available
-            if (snapshot.storage && snapshot.storage.storageSource === 'browser sandbox') {
-                document.getElementById('storage-note').style.display = 'block';
+            if (snapshot.storage && snapshot.storage.storageSource === 'browser-sandbox') {
+                const note = document.getElementById('storage-note');
+                note.style.display = 'block';
+                const lastUpdated = document.getElementById('storage-last-updated');
+                if (lastUpdated) {
+                    lastUpdated.textContent = new Date().toLocaleTimeString();
+                }
             }
 
             container.style.display = 'block';
@@ -656,20 +700,40 @@
                 const statusText = document.getElementById('status-text');
                 statusText.textContent = 'Sending data to server...';
                 
+                // Ensure sessionId is included in snapshot for backend
+                const payload = {
+                    sessionId: sessionId,
+                    snapshot: {
+                        ...snapshot,
+                        sessionId: sessionId  // Include in snapshot for consistency
+                    }
+                };
+                
+                console.log('[COLLECTOR] Sending snapshot to /api/collect:', {
+                    sessionId: sessionId,
+                    hasBattery: !!snapshot.battery,
+                    hasStorage: !!snapshot.storage,
+                    batteryLevel: snapshot.batteryLevel,
+                    batteryCharging: snapshot.batteryCharging,
+                    insecureContext: snapshot.insecureContext,
+                    storageSandboxUsedMB: snapshot.storage?.storageSandboxUsedMB,
+                    storageSandboxQuotaMB: snapshot.storage?.storageSandboxQuotaMB,
+                    storageSandboxUsagePercent: snapshot.storage?.storageSandboxUsagePercent
+                });
+                
                 // Use relative path for API calls
                 const response = await fetch('/api/collect', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        sessionId: sessionId,
-                        snapshot: snapshot
-                    })
+                    body: JSON.stringify(payload)
                 });
 
                 const result = await response.json();
                 if (result.success) {
                     document.getElementById('status').className = 'status success show';
                     document.getElementById('status-text').textContent = '✅ Data collected and sent successfully!';
+                    
+                    console.log('[COLLECTOR] POST successful:', result);
                     
                     // Show green toast on first successful POST
                     if (!firstPostSuccess) {
@@ -680,6 +744,7 @@
                     throw new Error(result.error || 'Failed to send data');
                 }
             } catch (error) {
+                console.error('[COLLECTOR] POST failed:', error);
                 document.getElementById('status').className = 'status error show';
                 document.getElementById('status-text').textContent = `❌ Error: ${error.message}`;
                 showToast(`Error: ${error.message}`, 'error');

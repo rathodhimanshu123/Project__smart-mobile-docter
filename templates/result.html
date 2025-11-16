@@ -602,6 +602,38 @@
                 transform: translateX(-50%) translateY(0);
             }
         }
+        
+        /* Prediction Styles */
+        .prediction-score {
+            transition: color 0.3s ease;
+        }
+        .prediction-score.score-good {
+            color: var(--success-600);
+        }
+        .prediction-score.score-fair {
+            color: var(--warning-600);
+        }
+        .prediction-score.score-poor {
+            color: var(--error-600);
+        }
+        .risk-badge {
+            padding: var(--space-2) var(--space-4);
+            border-radius: var(--radius-full);
+            font-weight: 600;
+            display: inline-block;
+        }
+        .risk-badge.risk-low {
+            background: var(--success-100);
+            color: var(--success-700);
+        }
+        .risk-badge.risk-medium {
+            background: var(--warning-100);
+            color: var(--warning-700);
+        }
+        .risk-badge.risk-high {
+            background: var(--error-100);
+            color: var(--error-700);
+        }
     </style>
 </head>
 <body class="animate-fade-in">
@@ -757,6 +789,101 @@
                     </div>
                 </div>
                         
+                <!-- 3-Hour Minute-Resolution Prediction Section -->
+                <div class="result-card animate-slide-up" id="prediction-card" style="animation-delay: 0.17s; display: none;">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <i class="fas fa-crystal-ball"></i>
+                        </div>
+                        <div style="flex: 1;">
+                            <h3>3-Hour Minute-Resolution Prediction</h3>
+                            <p style="margin: 0; color: var(--text-secondary); font-size: var(--text-sm);">Short-term battery forecasting based on rolling sample history</p>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: var(--space-2);">
+                            <label style="font-size: var(--text-xs); color: var(--text-secondary); display: flex; align-items: center; gap: var(--space-1);">
+                                <input type="checkbox" id="prediction-demo-toggle" style="margin: 0;">
+                                Demo Mode (60×)
+                            </label>
+                        </div>
+                    </div>
+                    <div style="padding: var(--space-6);">
+                        <!-- Health Score -->
+                        <div style="text-align: center; margin-bottom: var(--space-4);">
+                            <div style="font-size: var(--text-sm); color: var(--text-secondary); margin-bottom: var(--space-2);">3-Hour Projected Health Score</div>
+                            <div id="prediction-health-score" class="prediction-score" style="font-size: 3rem; font-weight: 700; line-height: 1;">--</div>
+                        </div>
+
+                        <!-- Status Indicators -->
+                        <div style="margin-bottom: var(--space-4); text-align: center;">
+                            <div id="prediction-fallback-indicator" style="display: none; padding: var(--space-2) var(--space-4); background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px; font-size: var(--text-xs); color: #856404; margin-bottom: var(--space-2);"></div>
+                            <div id="prediction-sample-count" style="font-size: var(--text-xs); color: var(--text-secondary);">Samples: --</div>
+                        </div>
+
+                        <!-- Battery Chart -->
+                        <div style="margin-bottom: var(--space-6);">
+                            <div style="font-size: var(--text-sm); font-weight: 600; margin-bottom: var(--space-2);">Battery Projection (0-180 minutes)</div>
+                            <div class="prediction-chart-container" style="height: 300px;">
+                                <canvas id="batteryChart" class="prediction-chart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Projected Times -->
+                        <div style="margin-bottom: var(--space-6);">
+                            <h4 style="font-size: var(--text-base); margin-bottom: var(--space-3);">Projected Times</h4>
+                            <ul id="prediction-projected-times" style="list-style: none; padding: 0; margin: 0;">
+                                <li style="padding: var(--space-2) 0; color: var(--text-secondary);">Calculating...</li>
+                            </ul>
+                        </div>
+
+                        <!-- Assumptions/Limits -->
+                        <div style="margin-top: var(--space-6); padding: var(--space-3); background: #e3f2fd; border-left: 4px solid #1976d2; border-radius: 4px; font-size: var(--text-xs); color: #1565c0;">
+                            <strong>ℹ️ Short-Term Forecasting:</strong> Predictions use recent battery drain trends from the last 6-12 samples (collected every 10-30s). If history is flat or insufficient, we use a conservative fallback estimate (0.01-0.05% per minute). Predictions pause while charging. Real hardware metrics require optional native collector. Predictions update automatically with each new battery reading.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Insufficient Data Message -->
+                <div class="result-card animate-slide-up" id="prediction-insufficient" style="display: none; animation-delay: 0.17s;">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <i class="fas fa-crystal-ball"></i>
+                        </div>
+                        <div>
+                            <h3>3-Hour Minute-Resolution Prediction</h3>
+                            <p style="margin: 0; color: var(--text-secondary); font-size: var(--text-sm);">Short-term battery forecasting</p>
+                        </div>
+                    </div>
+                    <div style="padding: var(--space-6); text-align: center;">
+                        <div class="insufficient-message" style="color: var(--text-secondary);">
+                            Insufficient data — collecting samples. Need at least 2 non-charging samples.
+                        </div>
+                        <p style="margin-top: var(--space-4); font-size: var(--text-sm); color: var(--text-tertiary);">
+                            The collector samples battery every 10-30s. Predictions will appear once enough data is collected.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Charging Paused Message -->
+                <div class="result-card animate-slide-up" id="prediction-charging" style="display: none; animation-delay: 0.17s;">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <i class="fas fa-plug"></i>
+                        </div>
+                        <div>
+                            <h3>3-Hour Minute-Resolution Prediction</h3>
+                            <p style="margin: 0; color: var(--text-secondary); font-size: var(--text-sm);">Predictions paused while charging</p>
+                        </div>
+                    </div>
+                    <div style="padding: var(--space-6); text-align: center;">
+                        <div class="charging-message" style="color: var(--text-secondary);">
+                            Predictions paused while device is charging.
+                        </div>
+                        <p style="margin-top: var(--space-4); font-size: var(--text-sm); color: var(--text-tertiary);">
+                            Battery predictions will resume automatically when charging stops.
+                        </p>
+                    </div>
+                </div>
+
                 <!-- Live Performance Monitor Section -->
                 <div class="result-card animate-slide-up live-monitor-card" style="animation-delay: 0.18s">
                     <div class="card-header">
@@ -802,10 +929,10 @@
                             <!-- Storage Gauge -->
                             <div class="gauge-container">
                                 <div class="gauge-header">
-                                    <span class="gauge-label">Storage Usage</span>
+                                    <span class="gauge-label">Storage Usage (Browser Sandbox)</span>
                                     <span id="storage-gauge-last-update" class="gauge-update-time"></span>
                                 </div>
-                                <div class="gauge-wrapper">
+                                <div class="gauge-wrapper" title="Browser sandbox storage (not full device storage)">
                                     <svg class="gauge-svg" viewBox="0 0 200 120">
                                         <defs>
                                             <linearGradient id="storageGradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -816,8 +943,8 @@
                                         </defs>
                                         <path class="gauge-track" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#e5e7eb" stroke-width="12"/>
                                         <path id="storage-gauge-arc" class="gauge-arc" d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="url(#storageGradient)" stroke-width="12" stroke-linecap="round"/>
-                                        <text id="storage-gauge-value" class="gauge-value" x="100" y="75" text-anchor="middle" font-size="24" font-weight="700" fill="var(--text-primary)">--%</text>
-                                        <text class="gauge-label-text" x="100" y="95" text-anchor="middle" font-size="12" fill="var(--text-secondary)">Storage</text>
+                                        <text id="storage-gauge-value" class="gauge-value" x="100" y="75" text-anchor="middle" font-size="24" font-weight="700" fill="var(--text-primary)" title="Browser sandbox storage (not full device storage)">--%</text>
+                                        <text class="gauge-label-text" x="100" y="95" text-anchor="middle" font-size="12" fill="var(--text-secondary)">Sandbox Storage</text>
                                     </svg>
                                 </div>
                             </div>
@@ -960,14 +1087,24 @@
                 {% endif %}
                 {% if session_id %}
                 <div style="display: flex; gap: var(--space-3); flex-wrap: wrap;">
-                    <a href="/api/download-health-report/{{ session_id }}" class="btn btn-secondary" download id="download-health-report-btn">
+                    <button class="btn btn-secondary" id="download-health-report-btn" onclick="downloadHealthReport()">
                         <i class="fas fa-file-pdf"></i>
                         Download Health Report (PDF)
-                    </a>
+                    </button>
                     <button class="btn btn-primary" id="share-report-btn" onclick="shareReport()">
                         <i class="fas fa-share-alt"></i>
                         Share Report
                     </button>
+                </div>
+                <div id="share-url-container" style="display: none; margin-top: var(--space-4); padding: var(--space-3); background: #f0f0f0; border-radius: 8px;">
+                    <label style="font-size: var(--text-sm); font-weight: 600; margin-bottom: var(--space-2); display: block;">Share URL:</label>
+                    <div style="display: flex; gap: var(--space-2);">
+                        <input type="text" id="share-url-input" readonly style="flex: 1; padding: var(--space-2); border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: var(--text-sm);">
+                        <button class="btn btn-secondary" onclick="copyShareUrl()" style="padding: var(--space-2) var(--space-4);">
+                            <i class="fas fa-copy"></i> Copy
+                        </button>
+                    </div>
+                    <p id="share-expires" style="margin-top: var(--space-2); font-size: var(--text-xs); color: var(--text-secondary);"></p>
                 </div>
                 {% else %}
                 <button class="btn btn-secondary" onclick="downloadResults()">
@@ -981,7 +1118,13 @@
 
 
     <!-- Template Data -->
+    <script>
+        // Feature flag for 12-hour time format (set to false to disable)
+        window.USE_12H_FORMAT = true;  // Default: enabled
+    </script>
+    <script src="{{ url_for('static', filename='js/time-utils.js') }}"></script>
     <script src="{{ url_for('static', filename='js/smart_diagnosis.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/prediction.js') }}"></script>
     <script type="application/json" id="template-data">
         {
             "phoneInfo": {{ phone_info | tojson | safe }},
@@ -996,6 +1139,7 @@
     <script>
         // Get sessionId from page (should be set by server)
         const sessionId = '{{ session_id }}' || null;
+        window.sessionId = sessionId;  // Make available to prediction.js
         let eventSource = null;
         let currentSnapshot = null;
         let currentLive = null;
@@ -1230,18 +1374,18 @@
                     // Exact format: "19% (Charging|Not charging)"
                     return `${v.level}%${v.charging ? ' (Charging)' : ' (Not charging)'}`;
                 }},
-                { key: 'storage', label: 'Storage', format: (v) => {
+                { key: 'storage', label: 'Storage (Browser Sandbox)', format: (v) => {
                     if (!v) return null;
                     // Use new sandbox format if available
                     if (v.storageSandboxQuotaMB !== undefined && v.storageSandboxUsedMB !== undefined) {
-                        return `Browser Sandbox: ${v.storageSandboxUsedMB} MB used of ${v.storageSandboxQuotaMB} MB (${v.storageSandboxUsagePercent}%)`;
+                        return `Browser Sandbox: ${v.storageSandboxUsedMB} MB used of ${v.storageSandboxQuotaMB} MB (${v.storageSandboxUsagePercent}% used) - Not full device storage`;
                     }
                     // Fallback to old format
                     if (v.quota) {
                         const free = v.quota - v.usage;
                         const freeGB = (free / (1024 * 1024 * 1024)).toFixed(2);
                         const totalGB = (v.quota / (1024 * 1024 * 1024)).toFixed(2);
-                        return `${freeGB} GB free of ${totalGB} GB`;
+                        return `Browser Sandbox: ${freeGB} GB free of ${totalGB} GB - Not full device storage`;
                     }
                     return null;
                 }},
@@ -1430,6 +1574,11 @@
                             hasReceivedSnapshot = true;
                             showToast('Device data received', 'success');
                         }
+                    } else if (data.type === 'prediction' && data.data) {
+                        // Prediction update
+                        if (window.PredictionModule && window.PredictionModule.renderPrediction) {
+                            window.PredictionModule.renderPrediction(data.data);
+                        }
                     } else if (data.type === 'battery' && data.data) {
                         // Live battery update
                         currentLive = data.data;
@@ -1510,10 +1659,10 @@
                 arc.classList.add('red');
             }
             
-            // Update timestamp
+            // Update timestamp with "Last updated: HH:MM:SS" format
             if (updateTime) {
                 const now = new Date();
-                updateTime.textContent = now.toLocaleTimeString();
+                updateTime.textContent = `Last updated: ${now.toLocaleTimeString()}`;
             }
         }
 
@@ -1567,9 +1716,11 @@
             // Update Storage Gauge
             if (currentSnapshot.storage) {
                 let usagePercent = 0;
+                // Prefer new sandbox format
                 if (currentSnapshot.storage.storageSandboxUsagePercent !== undefined) {
                     usagePercent = currentSnapshot.storage.storageSandboxUsagePercent;
                 } else if (currentSnapshot.storage.quota && currentSnapshot.storage.usage) {
+                    // Fallback to old format (bytes)
                     const quota = parseFloat(currentSnapshot.storage.quota);
                     const usage = parseFloat(currentSnapshot.storage.usage);
                     if (!isNaN(quota) && !isNaN(usage) && quota > 0) {
@@ -1579,11 +1730,19 @@
                 if (usagePercent > 0) {
                     updateGauge('storage', usagePercent);
                 } else {
-                    // Show "Not exposed by browser" in gauge
+                    // Show "N/A" in gauge with tooltip
                     const valueText = document.getElementById('storage-gauge-value');
                     if (valueText) {
                         valueText.textContent = 'N/A';
+                        valueText.setAttribute('title', 'Browser sandbox storage (not full device storage)');
                     }
+                }
+            } else {
+                // No storage data - show N/A
+                const valueText = document.getElementById('storage-gauge-value');
+                if (valueText) {
+                    valueText.textContent = 'N/A';
+                    valueText.setAttribute('title', 'Browser sandbox storage (not full device storage)');
                 }
             }
             
@@ -1620,37 +1779,65 @@
                 updateAllGauges();
             }, 2000);
             
-            // Update storage gauge every 12 seconds (10-15s range)
+            // Update storage gauge every 12 seconds (polling interval)
             storageUpdateInterval = setInterval(() => {
-                if (currentSnapshot && currentSnapshot.storage) {
-                    // Re-fetch storage estimate if possible
-                    if (navigator.storage && navigator.storage.estimate) {
-                        navigator.storage.estimate().then(estimate => {
-                            if (currentSnapshot) {
-                                const quotaMB = Math.round((estimate.quota || 0) / (1024 * 1024));
-                                const usageMB = Math.round((estimate.usage || 0) / (1024 * 1024));
-                                const usagePercent = quotaMB > 0 ? Math.round((usageMB / quotaMB) * 100) : 0;
-                                
-                                if (!currentSnapshot.storage) {
-                                    currentSnapshot.storage = {};
-                                }
-                                currentSnapshot.storage.storageSandboxUsagePercent = usagePercent;
-                                currentSnapshot.storage.storageSandboxQuotaMB = quotaMB;
-                                currentSnapshot.storage.storageSandboxUsedMB = usageMB;
-                                
-                                updateGauge('storage', usagePercent);
-                                
-                                // Update AI Health Diagnosis
-                                if (window.SmartDiagnosis && window.SmartDiagnosis.updateSmartDiagnosis) {
-                                    window.SmartDiagnosis.updateSmartDiagnosis(currentSnapshot);
-                                }
-                            }
-                        }).catch(err => {
-                            console.warn('[MONITOR] Storage estimate failed:', err);
-                        });
-                    }
+                // Helper function to convert bytes to MB
+                function bytesToMB(bytes) {
+                    if (!bytes || bytes === 0) return 0;
+                    return Math.round(bytes / (1024 * 1024));
                 }
-            }, 12000);
+                
+                // Re-fetch storage estimate if possible (only in secure context)
+                const isSecure = window.location.protocol === 'https:';
+                if (isSecure && navigator.storage && navigator.storage.estimate) {
+                    navigator.storage.estimate().then(estimate => {
+                        if (currentSnapshot) {
+                            const quotaMB = bytesToMB(estimate.quota || 0);
+                            const usageMB = bytesToMB(estimate.usage || 0);
+                            const usagePercent = quotaMB > 0 ? Math.round((usageMB / quotaMB) * 100) : 0;
+                            
+                            if (!currentSnapshot.storage) {
+                                currentSnapshot.storage = {};
+                            }
+                            currentSnapshot.storage.storageSandboxUsagePercent = usagePercent;
+                            currentSnapshot.storage.storageSandboxQuotaMB = quotaMB;
+                            currentSnapshot.storage.storageSandboxUsedMB = usageMB;
+                            currentSnapshot.storage.storageSource = "browser-sandbox";
+                            // Keep raw values for backward compatibility
+                            currentSnapshot.storage.quota = estimate.quota;
+                            currentSnapshot.storage.usage = estimate.usage;
+                            
+                            updateGauge('storage', usagePercent);
+                            
+                            console.log('[MONITOR] Storage updated:', {
+                                usedMB: usageMB,
+                                quotaMB: quotaMB,
+                                usagePercent: usagePercent,
+                                timestamp: new Date().toISOString()
+                            });
+                            
+                            // Update AI Health Diagnosis
+                            if (window.SmartDiagnosis && window.SmartDiagnosis.updateSmartDiagnosis) {
+                                window.SmartDiagnosis.updateSmartDiagnosis(currentSnapshot);
+                            }
+                        }
+                    }).catch(err => {
+                        console.warn('[MONITOR] Storage estimate failed:', err);
+                        // Show N/A in gauge
+                        const valueText = document.getElementById('storage-gauge-value');
+                        if (valueText) {
+                            valueText.textContent = 'N/A';
+                        }
+                    });
+                } else {
+                    // Not available - show N/A
+                    const valueText = document.getElementById('storage-gauge-value');
+                    if (valueText) {
+                        valueText.textContent = 'N/A';
+                    }
+                    console.log('[MONITOR] Storage not available:', !isSecure ? 'Insecure context (HTTPS required)' : 'API not supported');
+                }
+            }, 12000);  // Every 12 seconds
             
             // Run responsiveness test every 5 seconds
             responsivenessTestInterval = setInterval(() => {
@@ -1713,7 +1900,30 @@
             }
         }
 
-        // Share Report function
+        // Retry helper with exponential backoff
+        async function fetchWithRetry(url, options = {}, maxRetries = 3) {
+            const delays = [1000, 2000, 4000]; // 1s, 2s, 4s
+            for (let attempt = 0; attempt < maxRetries; attempt++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (response.ok) {
+                        return response;
+                    }
+                    if (attempt < maxRetries - 1) {
+                        await new Promise(resolve => setTimeout(resolve, delays[attempt]));
+                    }
+                } catch (error) {
+                    if (attempt < maxRetries - 1) {
+                        await new Promise(resolve => setTimeout(resolve, delays[attempt]));
+                    } else {
+                        throw error;
+                    }
+                }
+            }
+            throw new Error('Max retries exceeded');
+        }
+
+        // Share Report function with retry logic
         async function shareReport() {
             if (!sessionId) {
                 showToast('No session ID available', 'error');
@@ -1721,30 +1931,49 @@
             }
             
             const btn = document.getElementById('share-report-btn');
+            const container = document.getElementById('share-url-container');
+            const urlInput = document.getElementById('share-url-input');
+            const expiresEl = document.getElementById('share-expires');
+            
             if (btn) {
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
             }
             
             try {
-                const response = await fetch(`/api/share-report/${sessionId}`, {
+                const response = await fetchWithRetry(`/api/share-report/${sessionId}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
                 
+                if (!response.ok) {
+                    throw new Error(`Server returned ${response.status}`);
+                }
+                
                 const data = await response.json();
                 
-                if (data.success) {
-                    // Copy to clipboard
-                    await navigator.clipboard.writeText(data.share_url);
-                    showToast('Share link copied to clipboard!', 'success');
+                if (data.ok && data.url) {
+                    // Show share URL in textbox
+                    if (urlInput) {
+                        urlInput.value = data.url;
+                    }
+                    if (expiresEl && data.expires) {
+                        const expiresAt = new Date(data.expires);
+                        expiresEl.textContent = `Expires: ${expiresAt.toLocaleString()}`;
+                    }
+                    if (container) {
+                        container.style.display = 'block';
+                    }
                     
-                    // Show share URL in a prompt
-                    const expiresAt = new Date(data.expires_at);
-                    const message = `Share link created!\n\nURL: ${data.share_url}\nExpires: ${expiresAt.toLocaleString()}\n\nLink copied to clipboard.`;
-                    alert(message);
+                    // Copy to clipboard
+                    try {
+                        await navigator.clipboard.writeText(data.url);
+                        showToast('Share link created and copied to clipboard!', 'success');
+                    } catch (clipboardError) {
+                        showToast('Share link created!', 'success');
+                    }
                 } else {
-                    throw new Error(data.error || 'Failed to create share link');
+                    throw new Error(data.error || 'Share link created but server returned non-200');
                 }
             } catch (error) {
                 console.error('[SHARE] Error:', error);
@@ -1756,9 +1985,111 @@
                 }
             }
         }
+
+        // Copy share URL to clipboard
+        function copyShareUrl() {
+            const urlInput = document.getElementById('share-url-input');
+            if (urlInput && urlInput.value) {
+                urlInput.select();
+                document.execCommand('copy');
+                showToast('Share URL copied to clipboard!', 'success');
+            }
+        }
+
+        // Download Health Report function with async PDF support
+        async function downloadHealthReport() {
+            if (!sessionId) {
+                showToast('No session ID available', 'error');
+                return;
+            }
+            
+            const btn = document.getElementById('download-health-report-btn');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+            }
+            
+            try {
+                const response = await fetchWithRetry(`/api/download-health-report/${sessionId}`);
+                
+                if (response.status === 202) {
+                    // Async generation - poll for status
+                    const data = await response.json();
+                    const token = data.token;
+                    
+                    if (btn) {
+                        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating PDF...';
+                    }
+                    
+                    // Poll for status
+                    const pollInterval = setInterval(async () => {
+                        try {
+                            const statusResponse = await fetch(`/api/report-status/${token}`);
+                            const statusData = await statusResponse.json();
+                            
+                            if (statusData.status === 'ready') {
+                                clearInterval(pollInterval);
+                                // Download the file
+                                window.location.href = `/download-file/${token}`;
+                                if (btn) {
+                                    btn.disabled = false;
+                                    btn.innerHTML = '<i class="fas fa-file-pdf"></i> Download Health Report (PDF)';
+                                }
+                                showToast('PDF ready! Download starting...', 'success');
+                            } else if (statusData.status === 'error') {
+                                clearInterval(pollInterval);
+                                throw new Error(statusData.error || 'PDF generation failed');
+                            }
+                        } catch (pollError) {
+                            clearInterval(pollInterval);
+                            throw pollError;
+                        }
+                    }, 1000); // Poll every second
+                    
+                    // Timeout after 60 seconds
+                    setTimeout(() => {
+                        clearInterval(pollInterval);
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.innerHTML = '<i class="fas fa-file-pdf"></i> Download Health Report (PDF)';
+                        }
+                        showToast('PDF generation timed out. Please try again.', 'error');
+                    }, 60000);
+                    
+                } else if (response.ok) {
+                    // Synchronous generation - download immediately
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `health-report-${sessionId}-${new Date().toISOString().split('T')[0]}.pdf`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                    
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fas fa-file-pdf"></i> Download Health Report (PDF)';
+                    }
+                    showToast('PDF downloaded successfully!', 'success');
+                } else {
+                    throw new Error(`Server returned ${response.status}`);
+                }
+            } catch (error) {
+                console.error('[DOWNLOAD] Error:', error);
+                showToast(`Failed to download report: ${error.message}`, 'error');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-file-pdf"></i> Download Health Report (PDF)';
+                }
+            }
+        }
         
-        // Make shareReport globally available
+        // Make functions globally available
         window.shareReport = shareReport;
+        window.copyShareUrl = copyShareUrl;
+        window.downloadHealthReport = downloadHealthReport;
 
         document.addEventListener('DOMContentLoaded', function() {
             // Setup Live Monitor toggle button
