@@ -1172,6 +1172,20 @@
         // Get sessionId from page (should be set by server)
         const sessionId = '{{ session_id }}' || null;
         window.sessionId = sessionId;  // Make available to prediction.js
+        const templateDataElement = document.getElementById('template-data');
+        const templateDataPayload = templateDataElement ? JSON.parse(templateDataElement.textContent) : {
+            phoneInfo: {},
+            issue: null,
+            solution: null,
+            performanceScore: null
+        };
+        const templatePhoneInfo = templateDataPayload.phoneInfo || {};
+        window.templateDataPayload = templateDataPayload;
+        const mergedDataPayload = {{ merged_data | tojson | safe if merged_data else 'null' }};
+        window.mergedDeviceData = mergedDataPayload && mergedDataPayload !== 'null' ? mergedDataPayload : null;
+        let latestPerformanceScore = typeof templateDataPayload.performanceScore === 'number'
+            ? templateDataPayload.performanceScore
+            : parseFloat(templateDataPayload.performanceScore) || null;
         let eventSource = null;
         let currentSnapshot = null;
         let currentLive = null;
@@ -1379,6 +1393,9 @@
             }
 
             console.log('[DASHBOARD] Performance score recomputed:', performance_score);
+            latestPerformanceScore = clamp(performance_score, 0, 100);
+            renderDeviceAgeCard();
+            document.dispatchEvent(new CustomEvent('device-age-recompute'));
         }
 
         // Update device info table
@@ -2291,6 +2308,7 @@
                     
                     if (result.success && result.verified_score) {
                         renderVerifiedScore(result.verified_score);
+                        document.dispatchEvent(new CustomEvent('device-age-verified'));
                     }
                 } catch (error) {
                     console.error('Error loading verified score:', error);
@@ -2408,8 +2426,1143 @@
                 
                 // Store breakdown for breakdown panel
                 window.verifiedScoreBreakdown = breakdown;
+                renderDeviceAgeCard();
+                document.dispatchEvent(new CustomEvent('device-age-verified'));
             }
             
+            const OS_RELEASE_YEARS = {
+                android: {
+                    "4": 2011,
+                    "4.1": 2012,
+                    "4.2": 2012,
+                    "4.3": 2013,
+                    "4.4": 2013,
+                    "5": 2014,
+                    "5.1": 2015,
+                    "6": 2015,
+                    "7": 2016,
+                    "7.1": 2016,
+                    "8": 2017,
+                    "8.1": 2017,
+                    "9": 2018,
+                    "10": 2019,
+                    "11": 2020,
+                    "12": 2021,
+                    "12L": 2022,
+                    "13": 2022,
+                    "14": 2023,
+                    "15": 2024
+                },
+                ios: {
+                    "10": 2016,
+                    "11": 2017,
+                    "12": 2018,
+                    "13": 2019,
+                    "14": 2020,
+                    "15": 2021,
+                    "16": 2022,
+                    "17": 2023,
+                    "18": 2024
+                }
+            };
+            
+            const DEVICE_AGE_DEBUG = window.DEVICE_AGE_DEBUG !== undefined ? window.DEVICE_AGE_DEBUG : true;
+            function deviceAgeLog(message, data) {
+                if (!DEVICE_AGE_DEBUG) return;
+                if (data !== undefined) {
+                    console.debug(`[DEVICE_AGE] ${message}`, data);
+                } else {
+                    console.debug(`[DEVICE_AGE] ${message}`);
+                }
+            }
+            
+            const DEVICE_AGE_ALIASES = {
+                batteryDesign: [
+                    'battery.design_capacity',
+                    'battery_capacity_mah',
+                    'batteryCapacity',
+                    'battery.designCapacity',
+                    'battery.specs.capacity',
+                    'design_capacity',
+                    'designCapacity',
+                    'battery.design',
+                    'battery.mAh',
+                    'battery.mah',
+                    'merged_data.battery.design_capacity',
+                    'merged_data.battery.designCapacity',
+                    'deviceInfo.battery.mAh',
+                    'battery.design_capacity',
+                    'battery.designCapacity'
+                ],
+                batteryCurrent: [
+                    'battery.current_capacity',
+                    'battery.currentCapacity',
+                    'battery.capacity.current',
+                    'battery_current_capacity',
+                    'battery.current',
+                    'currentCapacity',
+                    'current_capacity',
+                    'deviceBattery.current',
+                    'battery.level',
+                    'battery.percent'
+                ],
+                batteryPercent: [
+                    'battery.level',
+                    'batteryPercent',
+                    'battery.percent',
+                    'battery_percent',
+                    'battery_status.percent',
+                    'battery.chargePercent'
+                ],
+                batteryHealthPercent: [
+                    'battery.health',
+                    'batteryHealth',
+                    'battery.healthPercent',
+                    'batteryHealthPercent',
+                    'battery_health_percent',
+                    'health.battery',
+                    'battery_state.healthPercent'
+                ],
+                ram: [
+                    'ram_gb',
+                    'ramGB',
+                    'ram',
+                    'ramGb',
+                    'deviceMemory',
+                    'memory.total',
+                    'hardware.ram'
+                ],
+                performanceScore: [
+                    'latestPerformanceScore',
+                    'performance_score',
+                    'performanceScore',
+                    'scores.performance',
+                    'diagnostics.performanceScore',
+                    'perfScore'
+                ],
+                responsiveness: [
+                    'responsivenessIndex',
+                    'responsiveness.index',
+                    'responsiveness',
+                    'metrics.responsiveness',
+                    'diagnostics.responsiveness'
+                ],
+                storageUsage: [
+                    'storageUsagePercent',
+                    'storage.usedPercent',
+                    'storage.percentUsed',
+                    'storageUsage',
+                    'storage.percent',
+                    'storage.storageSandboxUsagePercent'
+                ],
+                osVersion: [
+                    'merged_data.os.version',
+                    'deviceInfo.osVersion',
+                    'platform.version',
+                    'osVersion',
+                    'resultData.os',
+                    'device.platform',
+                    'device.platformVersion',
+                    'device.osVersion',
+                    'os.version',
+                    'androidVersion',
+                    'iosVersion',
+                    'merged_data.user_agent',
+                    'templatePayload.userAgent',
+                    'userAgent'
+                ]
+            };
+            
+            function parseNumericValue(value) {
+                if (value === null || value === undefined) return null;
+                if (typeof value === 'number' && !Number.isNaN(value)) return value;
+                const match = String(value).replace(/,/g, '').match(/-?\d+(\.\d+)?/);
+                return match ? parseFloat(match[0]) : null;
+            }
+            
+            function clampValue(value, min = 0, max = Number.POSITIVE_INFINITY) {
+                if (value === null || value === undefined || Number.isNaN(value)) {
+                    return min;
+                }
+                return Math.max(min, Math.min(max, value));
+            }
+            
+            function resolveDeviceAgePath(obj, path) {
+                if (!obj || !path) return undefined;
+                if (!path.includes('.')) return obj[path];
+                return path.split('.').reduce((acc, key) => {
+                    if (acc === undefined || acc === null) return undefined;
+                    return acc[key];
+                }, obj);
+            }
+            
+            function gatherDeviceAgeSources() {
+                const sources = [];
+                if (deviceInfo) sources.push({ label: 'deviceInfo', data: deviceInfo });
+                if (templatePhoneInfo && Object.keys(templatePhoneInfo).length) {
+                    sources.push({ label: 'templatePhoneInfo', data: templatePhoneInfo });
+                }
+                if (templateDataPayload) {
+                    sources.push({ label: 'templatePayload', data: templateDataPayload });
+                }
+                if (currentSnapshot) sources.push({ label: 'snapshot', data: currentSnapshot });
+                if (currentLive) sources.push({ label: 'live', data: currentLive });
+                if (window.verifiedScoreBreakdown) {
+                    sources.push({ label: 'verifiedScore', data: window.verifiedScoreBreakdown });
+                }
+                if (window.mergedDeviceData) {
+                    sources.push({ label: 'mergedData', data: window.mergedDeviceData });
+                }
+                return sources;
+            }
+            
+            function gatherAliasValue(sources, aliases, { numeric = true } = {}) {
+                for (const alias of aliases) {
+                    for (const source of sources) {
+                        const raw = resolveDeviceAgePath(source.data, alias);
+                        if (raw === undefined || raw === null) continue;
+                        const value = numeric ? parseNumericValue(raw) : raw;
+                        if (numeric && value === null) continue;
+                        return { value, alias, source: source.label, raw };
+                    }
+                }
+                return null;
+            }
+            
+            function estimateFactoryBatteryCapacity(context = {}, fallbackValue = null, ramHint = null) {
+                const manufacturer = (context.manufacturer || '').toLowerCase();
+                const model = (context.model || '').toLowerCase();
+                const combined = `${manufacturer} ${model}`.trim();
+                let value = null;
+                let source = '';
+                
+                if (combined.includes('iphone') || manufacturer.includes('apple')) {
+                    value = 3200;
+                    source = 'Typical iPhone battery spec';
+                } else if (combined.includes('pixel')) {
+                    value = 4350;
+                    source = 'Google Pixel class average';
+                } else if (combined.includes('oneplus')) {
+                    value = 4500;
+                    source = 'OnePlus flagship baseline';
+                } else if (combined.includes('galaxy') || manufacturer.includes('samsung')) {
+                    value = 4800;
+                    source = 'Samsung Galaxy series average';
+                } else if (combined.includes('xiaomi') || combined.includes('redmi') || combined.includes('poco')) {
+                    value = 5000;
+                    source = 'Xiaomi/Redmi typical spec';
+                } else if (combined.includes('realme') || combined.includes('oppo') || combined.includes('vivo')) {
+                    value = 4800;
+                    source = 'BBK ecosystem average';
+                } else if (combined.includes('moto') || combined.includes('motorola')) {
+                    value = 4200;
+                    source = 'Motorola midrange typical';
+                } else if (combined.includes('sony') || combined.includes('nokia') || combined.includes('hmd')) {
+                    value = 4000;
+                    source = 'Legacy Android average';
+                }
+                
+                if (!value && fallbackValue) {
+                    value = fallbackValue;
+                    source = 'Provided capacity';
+                }
+                
+                if (!value && ramHint !== null) {
+                    if (ramHint > 6) {
+                        value = 4000;
+                        source = `Estimated from ${ramHint}GB RAM profile`;
+                    } else if (ramHint >= 4) {
+                        value = 3500;
+                        source = `Estimated from ${ramHint}GB RAM profile`;
+                    } else {
+                        value = 3000;
+                        source = `Estimated from ${ramHint}GB RAM profile`;
+                    }
+                }
+                
+                if (!value) {
+                    value = 4200;
+                    source = 'Default modern smartphone baseline';
+                }
+                
+                return { value, source, estimated: source !== 'Provided capacity' };
+            }
+            
+            function deriveCurrentCapacity(original, currentValue, healthPercent, levelPercent) {
+                if (currentValue) {
+                    return { value: currentValue, estimated: false, note: 'Provided current capacity' };
+                }
+                if (!original) {
+                    return { value: null, estimated: true, note: 'Unable to estimate current capacity' };
+                }
+                if (healthPercent !== null && healthPercent !== undefined) {
+                    const pct = clampValue(healthPercent / 100, 0.35, 1);
+                    return {
+                        value: original * pct,
+                        estimated: true,
+                        note: 'Estimated from battery health'
+                    };
+                }
+                if (levelPercent !== null && levelPercent !== undefined) {
+                    const factor = clampValue(0.65 + (levelPercent / 100) * 0.25, 0.4, 1);
+                    return {
+                        value: original * factor,
+                        estimated: true,
+                        note: 'Estimated from charge level'
+                    };
+                }
+                return {
+                    value: original * 0.82,
+                    estimated: true,
+                    note: 'Default capacity wear assumption'
+                };
+            }
+            
+            function derivePerformanceScore(perfEntry, respEntry, storageUsage) {
+                if (perfEntry && perfEntry.value !== null) {
+                    return {
+                        value: clampValue(perfEntry.value, 0, 100),
+                        estimated: false,
+                        note: `Direct score (${perfEntry.alias})`
+                    };
+                }
+                
+                const responsiveness = respEntry ? clampValue(respEntry.value, 0, 100) : null;
+                const storageComponent = storageUsage !== null ? clampValue(100 - storageUsage, 0, 100) : null;
+                
+                if (responsiveness === null && storageComponent === null) {
+                    return null;
+                }
+                
+                const respScore = responsiveness !== null ? responsiveness : 72;
+                const storageScore = storageComponent !== null ? storageComponent : 78;
+                
+                return {
+                    value: clampValue(Math.round(respScore * 0.6 + storageScore * 0.4), 30, 95),
+                    estimated: true,
+                    note: `Estimated from ${responsiveness !== null ? 'responsiveness' : ''}${responsiveness !== null && storageComponent !== null ? ' & ' : ''}${storageComponent !== null ? 'storage usage' : ''}`
+                };
+            }
+            
+            function extractOsFromUserAgent(userAgent) {
+                if (!userAgent) return null;
+                const ua = String(userAgent).toLowerCase();
+                let platform = 'android';
+                let version = null;
+                
+                // iOS detection
+                if (ua.includes('iphone os') || ua.includes('iphone') || ua.includes('ipad') || ua.includes('ios')) {
+                    platform = 'ios';
+                    // Match iOS version: "iPhone OS 13_5" or "OS 13_5" or "Version/13.5"
+                    const iosMatch = ua.match(/(?:iphone\s*os|os|version)[\/\s_]+(\d+)[_\.](\d+)/i) || 
+                                     ua.match(/(?:iphone\s*os|os|version)[\/\s_]+(\d+)/i);
+                    if (iosMatch) {
+                        version = iosMatch[2] ? `${iosMatch[1]}.${iosMatch[2]}` : iosMatch[1];
+                    }
+                } else if (ua.includes('android')) {
+                    platform = 'android';
+                    // Match Android version: "Android 10" or "Android/10" or "Android 8.1"
+                    const androidMatch = ua.match(/android[\/\s]+(\d+(?:\.\d+)?)/i);
+                    if (androidMatch) {
+                        version = androidMatch[1];
+                    }
+                }
+                
+                return version ? { platform, version, raw: userAgent } : null;
+            }
+            
+            function extractOsMetadata(osVersionRaw) {
+                if (!osVersionRaw) return null;
+                const cleaned = String(osVersionRaw).trim();
+                const lower = cleaned.toLowerCase();
+                let platform = 'android';
+                if (lower.includes('ios') || lower.includes('iphone') || lower.includes('ipad')) {
+                    platform = 'ios';
+                }
+                
+                // Aggressive regex extraction: \d+(\.\d+)? to extract major/minor
+                let versionMatch = cleaned.match(/\d+(\.\d+)?/);
+                let version = versionMatch ? versionMatch[0] : null;
+                
+                // Handle non-standard formats like "Android Oreo", "Android-8.1", "iOS 13.5"
+                if (!version) {
+                    // Try patterns like "Android-8.1", "Android 8.1", "iOS 13.5"
+                    const altMatch = cleaned.match(/(?:android|ios)[\s\-_]+(\d+(?:\.\d+)?)/i);
+                    if (altMatch) {
+                        version = altMatch[1];
+                    } else {
+                        // Try named versions (Oreo = 8, Pie = 9, etc.)
+                        const namedVersions = {
+                            'oreo': '8', 'pie': '9', 'q': '10', 'r': '11', 's': '12', 'tiramisu': '13', 'upside down cake': '14',
+                            'nougat': '7', 'marshmallow': '6', 'lollipop': '5', 'kitkat': '4.4'
+                        };
+                        for (const [name, ver] of Object.entries(namedVersions)) {
+                            if (lower.includes(name)) {
+                                version = ver;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                // If still no version and it looks like a user agent, try user agent extraction
+                if (!version && (cleaned.includes('Mozilla') || cleaned.includes('AppleWebKit') || cleaned.includes('Chrome'))) {
+                    const uaExtract = extractOsFromUserAgent(cleaned);
+                    if (uaExtract) {
+                        platform = uaExtract.platform;
+                        version = uaExtract.version;
+                    }
+                }
+                
+                // Normalize version to major.minor format
+                let osMajor = version;
+                if (version) {
+                    const parts = version.split('.');
+                    osMajor = parts[0] + (parts[1] ? '.' + parts[1] : '');
+                }
+                
+                const mapping = OS_RELEASE_YEARS[platform] || {};
+                let releaseYear = null;
+                if (osMajor && mapping[osMajor]) {
+                    releaseYear = mapping[osMajor];
+                } else if (osMajor) {
+                    const major = osMajor.replace(/[^0-9\.]+/g, '').split('.')[0];
+                    if (mapping[major]) {
+                        releaseYear = mapping[major];
+                    } else {
+                        const approx = parseFloat(major);
+                        if (!Number.isNaN(approx)) {
+                            releaseYear = Math.max(2010, Math.min(new Date().getFullYear(), 2010 + approx));
+                        }
+                    }
+                }
+                
+                return {
+                    platform,
+                    version: osMajor || version || cleaned,
+                    releaseYear,
+                    label: osMajor ? `${platform === 'ios' ? 'iOS' : 'Android'} ${osMajor}` : cleaned,
+                    osMajor: osMajor || null
+                };
+            }
+            
+            function gatherDeviceAgeInputs() {
+                const sources = gatherDeviceAgeSources();
+                if (!sources.length) {
+                    deviceAgeLog('No sources available for device age computation');
+                }
+                const aliasUsage = {};
+                const noteFallback = [];
+                const estimatedFields = new Set();
+                const discoveredAliases = [];
+                const aliasHelper = (key, aliases, options) => {
+                    const entry = gatherAliasValue(sources, aliases, options);
+                    if (entry) {
+                        aliasUsage[key] = { alias: entry.alias, source: entry.source, raw: entry.raw };
+                        discoveredAliases.push({ key, alias: entry.alias, source: entry.source, raw: entry.raw });
+                        deviceAgeLog(`Found ${key} via alias "${entry.alias}" from source "${entry.source}"`, { raw: entry.raw });
+                    }
+                    return entry;
+                };
+                
+                // Aggressive OS version gathering - try all aliases including user agent sources
+                let osEntry = aliasHelper('osVersion', DEVICE_AGE_ALIASES.osVersion, { numeric: false });
+                
+                // Try direct property access as fallback
+                if (!osEntry) {
+                    for (const source of sources) {
+                        if (source.data) {
+                            const osVal = source.data.osVersion || source.data.os?.version || 
+                                         source.data.platform?.version || source.data.androidVersion || 
+                                         source.data.iosVersion || source.data.version ||
+                                         source.data.resultData?.os || source.data.device?.platform ||
+                                         source.data.device?.platformVersion;
+                            if (osVal) {
+                                osEntry = { value: osVal, alias: 'direct-property', source: source.label, raw: osVal };
+                                aliasUsage['osVersion'] = { alias: 'direct-property', source: source.label, raw: osVal };
+                                discoveredAliases.push({ key: 'osVersion', alias: 'direct-property', source: source.label, raw: osVal });
+                                deviceAgeLog(`Found OS version via direct property from source "${source.label}"`, { raw: osVal });
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                // Try extracting from user agent strings in sources
+                if (!osEntry) {
+                    for (const source of sources) {
+                        if (source.data) {
+                            const ua = source.data.userAgent || source.data.user_agent || 
+                                      source.data.merged_data?.user_agent || 
+                                      source.data.templatePayload?.userAgent;
+                            if (ua) {
+                                const uaExtract = extractOsFromUserAgent(ua);
+                                if (uaExtract && uaExtract.version) {
+                                    osEntry = { value: uaExtract.version, alias: 'user-agent-extract', source: source.label, raw: ua };
+                                    aliasUsage['osVersion'] = { alias: 'user-agent-extract', source: source.label, raw: ua };
+                                    discoveredAliases.push({ key: 'osVersion', alias: 'user-agent-extract', source: source.label, raw: ua });
+                                    deviceAgeLog(`Extracted OS from user agent in source "${source.label}"`, { version: uaExtract.version, platform: uaExtract.platform });
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Try navigator.userAgent as last resort
+                if (!osEntry && typeof navigator !== 'undefined' && navigator.userAgent) {
+                    const uaExtract = extractOsFromUserAgent(navigator.userAgent);
+                    if (uaExtract && uaExtract.version) {
+                        osEntry = { value: uaExtract.version, alias: 'navigator.userAgent', source: 'browser', raw: navigator.userAgent };
+                        aliasUsage['osVersion'] = { alias: 'navigator.userAgent', source: 'browser', raw: navigator.userAgent };
+                        discoveredAliases.push({ key: 'osVersion', alias: 'navigator.userAgent', source: 'browser', raw: navigator.userAgent });
+                        deviceAgeLog('Extracted OS from navigator.userAgent', { version: uaExtract.version, platform: uaExtract.platform });
+                    }
+                }
+                
+                // Extract OS metadata if we found an OS entry
+                let osMetadata = null;
+                let osExtracted = null;
+                if (osEntry) {
+                    osMetadata = extractOsMetadata(osEntry.value);
+                    osExtracted = osMetadata?.osMajor || osMetadata?.version || osEntry.value;
+                    deviceAgeLog('OS extraction result', { 
+                        raw: osEntry.value, 
+                        extracted: osExtracted, 
+                        releaseYear: osMetadata?.releaseYear,
+                        platform: osMetadata?.platform 
+                    });
+                } else {
+                    deviceAgeLog('OS version missing - will use battery+performance fallback');
+                }
+                
+                const manufacturer = (deviceInfo && (deviceInfo.manufacturer || deviceInfo.brand)) ||
+                    (templatePhoneInfo && (templatePhoneInfo.manufacturer || templatePhoneInfo.brand)) ||
+                    '';
+                const model = (deviceInfo && (deviceInfo.model || deviceInfo.device_name)) ||
+                    (templatePhoneInfo && (templatePhoneInfo.model || templatePhoneInfo.device_name)) ||
+                    '';
+                
+                const baselineEntry = aliasHelper('batteryDesign', DEVICE_AGE_ALIASES.batteryDesign);
+                const currentEntry = aliasHelper('batteryCurrent', DEVICE_AGE_ALIASES.batteryCurrent);
+                const percentEntry = aliasHelper('batteryPercent', DEVICE_AGE_ALIASES.batteryPercent);
+                const healthEntry = aliasHelper('batteryHealthPercent', DEVICE_AGE_ALIASES.batteryHealthPercent);
+                const ramEntry = aliasHelper('ram', DEVICE_AGE_ALIASES.ram);
+                const performanceEntry = aliasHelper('performanceScore', DEVICE_AGE_ALIASES.performanceScore);
+                const responsivenessEntry = aliasHelper('responsiveness', DEVICE_AGE_ALIASES.responsiveness);
+                const storageEntry = aliasHelper('storageUsage', DEVICE_AGE_ALIASES.storageUsage);
+                
+                const factoryEstimate = estimateFactoryBatteryCapacity(
+                    { manufacturer, model },
+                    baselineEntry ? baselineEntry.value : null,
+                    ramEntry ? ramEntry.value : null
+                );
+                if (factoryEstimate.estimated) {
+                    noteFallback.push(factoryEstimate.source);
+                    estimatedFields.add('Factory capacity');
+                }
+                
+                const currentCapacity = deriveCurrentCapacity(
+                    factoryEstimate.value,
+                    currentEntry ? currentEntry.value : null,
+                    healthEntry ? healthEntry.value : null,
+                    percentEntry ? percentEntry.value : null
+                );
+                if (currentCapacity.estimated) {
+                    noteFallback.push(currentCapacity.note);
+                    estimatedFields.add('Current capacity');
+                }
+                
+                const storageUsage = storageEntry ? clampValue(storageEntry.value, 0, 100) : null;
+                const performanceResult = derivePerformanceScore(performanceEntry, responsivenessEntry, storageUsage);
+                let performanceScore = performanceResult ? performanceResult.value : latestPerformanceScore;
+                if (performanceScore === null || Number.isNaN(performanceScore)) {
+                    performanceScore = 75;
+                    noteFallback.push('Performance score defaulted to 75');
+                    estimatedFields.add('Performance score');
+                } else if (performanceResult && performanceResult.estimated) {
+                    noteFallback.push(performanceResult.note);
+                    estimatedFields.add('Performance score');
+                }
+                performanceScore = clampValue(performanceScore, 0, 100);
+                
+                // Mark OS as missing if not found
+                if (!osEntry || !osMetadata || !osMetadata.releaseYear) {
+                    estimatedFields.add('OS (missing)');
+                    noteFallback.push('OS: missing (used battery+perf fallback)');
+                }
+                
+                const estimationMeta = {
+                    usedEstimation: estimatedFields.size > 0,
+                    estimatedFields: Array.from(estimatedFields),
+                    notes: noteFallback.slice(),
+                    aliasUsage,
+                    osMissing: !osEntry || !osMetadata || !osMetadata.releaseYear
+                };
+                
+                // Adjust weights: increase battery weight when OS is missing
+                let weights;
+                if (estimationMeta.osMissing) {
+                    weights = { os: 0, battery: 0.6, performance: 0.4 };
+                } else if (estimationMeta.usedEstimation) {
+                    weights = { os: 0.3, battery: 0.5, performance: 0.2 };
+                } else {
+                    weights = { os: 0.4, battery: 0.4, performance: 0.2 };
+                }
+                
+                deviceAgeLog('Device age alias usage', aliasUsage);
+                deviceAgeLog('Device age fallbacks', estimationMeta.notes);
+                deviceAgeLog('Discovered aliases', discoveredAliases);
+                
+                return {
+                    osVersion: osEntry ? osEntry.value : null,
+                    osMetadata: osMetadata || null,
+                    osExtracted: osExtracted || null,
+                    originalBattery: factoryEstimate.value,
+                    currentBattery: currentCapacity.value,
+                    performanceScore,
+                    batteryMeta: {
+                        measuredBattery: baselineEntry ? baselineEntry.value : null,
+                        expectedBattery: factoryEstimate.value,
+                        originalSource: factoryEstimate.source,
+                        currentSource: currentCapacity.note
+                    },
+                    estimationMeta,
+                    weights,
+                    rawSignals: {
+                        batteryPercent: percentEntry ? percentEntry.value : null,
+                        batteryHealthPercent: healthEntry ? healthEntry.value : null
+                    },
+                    aliasUsage,
+                    discoveredAliases,
+                    fallbacksUsed: noteFallback.slice()
+                };
+            }
+            
+            function computeDeviceAgeDetails(osVersion, originalBattery, currentBattery, performanceScore, options = {}) {
+                // Allow computation even if OS is missing - use battery+performance fallback
+                const osMissing = !osVersion || (options.osMetadata && !options.osMetadata.releaseYear);
+                
+                if (!originalBattery || !currentBattery || performanceScore === null || performanceScore === undefined) {
+                    return null;
+                }
+                
+                const osMetadata = osVersion ? (options.osMetadata || extractOsMetadata(osVersion)) : null;
+                const ageFromOs = osMetadata && osMetadata.releaseYear 
+                    ? clampValue(new Date().getFullYear() - osMetadata.releaseYear, 0, 15)
+                    : null;
+                
+                const batteryDropRate = clampValue((originalBattery - currentBattery) / originalBattery, 0, 0.95);
+                const ageFromBattery = batteryDropRate / 0.07;
+                const perfScore = clampValue(performanceScore, 0, 100);
+                const ageFromPerformance = (100 - perfScore) / 60;
+                
+                const weights = options.weights || (osMissing ? { os: 0, battery: 0.6, performance: 0.4 } : { os: 0.4, battery: 0.4, performance: 0.2 });
+                
+                // Compute age: if OS missing, use only battery+performance
+                let deviceAge;
+                if (osMissing || ageFromOs === null) {
+                    deviceAge = (ageFromBattery * weights.battery) + (ageFromPerformance * weights.performance);
+                } else {
+                    deviceAge = (ageFromOs * weights.os) + (ageFromBattery * weights.battery) + (ageFromPerformance * weights.performance);
+                }
+                
+                deviceAge = Math.max(0.3, deviceAge); // Minimum 0.3 years
+                const rounded = Math.round(deviceAge * 10) / 10;
+                
+                return {
+                    formattedAge: `${rounded.toFixed(1)} years`,
+                    numericAge: rounded,
+                    components: {
+                        ageFromOs: ageFromOs !== null ? ageFromOs : null,
+                        ageFromBattery,
+                        ageFromPerformance,
+                        batteryDropRate
+                    },
+                    osMetadata: osMetadata || null,
+                    weights,
+                    osMissing: osMissing || false
+                };
+            }
+            
+            function calculateDeviceAge(osVersion, originalBattery, currentBattery, performanceScore) {
+                const details = computeDeviceAgeDetails(osVersion, originalBattery, currentBattery, performanceScore);
+                return details ? details.formattedAge : null;
+            }
+            window.calculateDeviceAge = calculateDeviceAge;
+            
+            function showDeviceAgeFallback() {
+                const card = document.getElementById('device-age-card');
+                const valueEl = document.getElementById('device-age-value');
+                const breakdownEl = document.getElementById('device-age-breakdown');
+                const badgeEl = document.getElementById('device-age-badge');
+                const fallbackEl = document.getElementById('device-age-fallback');
+                const estimationNote = document.getElementById('device-age-estimation-note');
+                if (!card) return;
+                
+                card.style.display = 'block';
+                if (valueEl) valueEl.textContent = '--';
+                if (badgeEl) {
+                    badgeEl.textContent = 'Data needed';
+                    badgeEl.className = 'health-status-badge unknown';
+                }
+                if (breakdownEl) {
+                    breakdownEl.style.display = 'none';
+                    breakdownEl.innerHTML = '';
+                }
+                if (estimationNote) estimationNote.remove();
+                if (fallbackEl) fallbackEl.style.display = 'block';
+            }
+            
+            // Defensive Device Age Renderer: wraps helpers with fallbacks, robust card location, and safe DOM updates.
+            // Remove this wrapper if debugging the core device-age logic.
+            function renderDeviceAgeCard() {
+                // Step 1: Robust card location - try id, then header text variations, then create temp card
+                let card = document.getElementById('device-age-card');
+                let cardCreated = false;
+                if (!card) {
+                    const headerTexts = ['estimated device age', 'device age', 'estimated age'];
+                    const header = Array.from(document.querySelectorAll('.card-header h3, h3')).find(el => {
+                        const text = (el.textContent || '').toLowerCase();
+                        return headerTexts.some(ht => text.includes(ht));
+                    });
+                    if (header) {
+                        card = header.closest('.result-card') || header.closest('.animate-slide-up') || header.closest('div');
+                    }
+                }
+                if (!card) {
+                    // Create temporary card for demo purposes
+                    const mainContainer = document.querySelector('.results-container, .page-container, main, body');
+                    if (mainContainer && mainContainer.parentNode) {
+                        card = document.createElement('div');
+                        card.id = 'device-age-card';
+                        card.className = 'result-card animate-slide-up';
+                        card.style.animationDelay = '0.16s';
+                        card.innerHTML = `
+                            <div class="card-header">
+                                <div class="card-icon"><i class="fas fa-hourglass-half"></i></div>
+                                <div>
+                                    <h3>📱 Estimated Device Age</h3>
+                                    <p style="margin: 0; color: var(--text-secondary); font-size: var(--text-sm);">AI-based analysis from OS, battery & performance</p>
+                                </div>
+                            </div>
+                            <div id="device-age-content" style="padding: var(--space-6);">
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);">
+                                    <div>
+                                        <div style="font-size: var(--text-sm); color: var(--text-secondary); margin-bottom: var(--space-2);">Estimated Device Age</div>
+                                        <div id="device-age-value" style="font-size: 3.25rem; font-weight: 700; line-height: 1;">--</div>
+                                    </div>
+                                    <div id="device-age-badge" class="health-status-badge unknown" style="padding: var(--space-3) var(--space-5); border-radius: var(--radius-full); font-weight: 600; font-size: var(--text-base);">Analyzing...</div>
+                                </div>
+                                <div id="device-age-breakdown" style="margin-top: var(--space-4); display: none; gap: var(--space-3);"></div>
+                                <div id="device-age-fallback" style="margin-top: var(--space-4); padding: var(--space-3); background: #fff3cd; border-left: 4px solid #fbbc05; border-radius: var(--radius-md); font-size: var(--text-sm); color: #7a5a00; display: none;">Not enough data to estimate device age.</div>
+                            </div>
+                        `;
+                        try {
+                            const verifiedCard = document.getElementById('verified-score-card');
+                            if (verifiedCard && verifiedCard.parentNode) {
+                                verifiedCard.parentNode.insertBefore(card, verifiedCard.nextSibling);
+                            } else {
+                                mainContainer.appendChild(card);
+                            }
+                        } catch (e) {
+                            deviceAgeLog('Failed to insert temp card', e);
+                            return;
+                        }
+                        cardCreated = true;
+                        deviceAgeLog('Created temporary device-age card');
+                    } else {
+                        deviceAgeLog('Cannot create card: no container found');
+                        return;
+                    }
+                }
+                
+                const valueEl = document.getElementById('device-age-value');
+                const breakdownEl = document.getElementById('device-age-breakdown');
+                const badgeEl = document.getElementById('device-age-badge');
+                const fallbackEl = document.getElementById('device-age-fallback');
+                const contentEl = document.getElementById('device-age-content');
+                if (!card) return;
+                
+                // Step 2: Try existing helpers first, then fallback to local computation
+                let inputs = null;
+                let details = null;
+                let helperUsed = 'none';
+                let fallbackComputed = false;
+                
+                try {
+                    inputs = gatherDeviceAgeInputs();
+                    if (inputs) {
+                        helperUsed = 'gatherDeviceAgeInputs';
+                        try {
+                            details = computeDeviceAgeDetails(
+                                inputs.osVersion,
+                                inputs.originalBattery,
+                                inputs.currentBattery,
+                                inputs.performanceScore,
+                                { osMetadata: inputs.osMetadata, weights: inputs.weights }
+                            );
+                            if (details) {
+                                helperUsed = 'computeDeviceAgeDetails';
+                            }
+                        } catch (e) {
+                            deviceAgeLog('computeDeviceAgeDetails failed', e);
+                        }
+                    }
+                } catch (e) {
+                    deviceAgeLog('gatherDeviceAgeInputs failed', e);
+                }
+                
+                // Step 3: Local fallback computation if helpers returned null - compute even if OS is missing
+                if (!details && inputs) {
+                    deviceAgeLog('Helpers returned null, computing guaranteed local fallback (OS may be missing)');
+                    fallbackComputed = true;
+                    try {
+                        // Compute using battery+performance even if OS is missing
+                        const originalBattery = inputs.originalBattery || 3500; // Default baseline from RAM
+                        const currentBattery = inputs.currentBattery || (originalBattery * 0.85); // Default 85% if missing
+                        const performanceScore = inputs.performanceScore !== null && inputs.performanceScore !== undefined 
+                            ? inputs.performanceScore : 75; // Default 75 if missing
+                        
+                        const osMetadata = inputs.osMetadata || (inputs.osVersion ? extractOsMetadata(inputs.osVersion) : null);
+                        const osMissing = !osMetadata || !osMetadata.releaseYear;
+                        
+                        const ageFromOs = osMetadata && osMetadata.releaseYear
+                            ? clampValue(new Date().getFullYear() - osMetadata.releaseYear, 0, 15)
+                            : null;
+                        
+                        const batteryDropRate = clampValue((originalBattery - currentBattery) / originalBattery, 0, 0.95);
+                        const ageFromBattery = batteryDropRate / 0.07;
+                        const perfScore = clampValue(performanceScore, 0, 100);
+                        const ageFromPerformance = (100 - perfScore) / 60;
+                        
+                        // Use adaptive weights: increase battery weight when OS is missing
+                        const weights = inputs.weights || (osMissing
+                            ? { os: 0, battery: 0.6, performance: 0.4 }
+                            : (inputs.estimationMeta && inputs.estimationMeta.usedEstimation
+                                ? { os: 0.35, battery: 0.45, performance: 0.20 }
+                                : { os: 0.4, battery: 0.4, performance: 0.2 }));
+                        
+                        let deviceAge;
+                        if (osMissing || ageFromOs === null) {
+                            deviceAge = (ageFromBattery * weights.battery) + (ageFromPerformance * weights.performance);
+                        } else {
+                            deviceAge = (ageFromOs * weights.os) + (ageFromBattery * weights.battery) + (ageFromPerformance * weights.performance);
+                        }
+                        deviceAge = Math.max(0.3, deviceAge); // Minimum 0.3 years
+                        const rounded = Math.round(deviceAge * 10) / 10;
+                        
+                        details = {
+                            formattedAge: `${rounded.toFixed(1)} years`,
+                            numericAge: rounded,
+                            components: { ageFromOs, ageFromBattery, ageFromPerformance, batteryDropRate },
+                            osMetadata: osMetadata || null,
+                            weights,
+                            osMissing: osMissing || false
+                        };
+                        helperUsed = 'local-fallback';
+                        deviceAgeLog('Local fallback computed age', { formattedAge: details.formattedAge, osMissing });
+                    } catch (e) {
+                        console.error('[DEVICE_AGE] Local fallback computation failed', e);
+                        deviceAgeLog('Local fallback computation failed', e);
+                    }
+                }
+                
+                // Only show "Not enough data" if we truly cannot compute (no battery/performance data)
+                if (!inputs || !details) {
+                    const reason = !inputs ? 'No data sources available' : 'Computation failed';
+                    deviceAgeLog(`Cannot compute age: ${reason}`, { hasInputs: !!inputs, hasDetails: !!details });
+                    if (fallbackEl && fallbackEl.parentNode) {
+                        fallbackEl.style.display = 'block';
+                        fallbackEl.textContent = `Not enough data to estimate device age. ${reason}.`;
+                    }
+                    if (valueEl && valueEl.parentNode) valueEl.textContent = '--';
+                    if (badgeEl && badgeEl.parentNode) {
+                        badgeEl.textContent = 'Data needed';
+                        badgeEl.className = 'health-status-badge unknown';
+                    }
+                    return;
+                }
+                
+                const dropPercent = Math.round((details.components.batteryDropRate || 0) * 100);
+                const originalBattery = inputs.originalBattery || 3500;
+                const batterySource = (inputs.batteryMeta && inputs.batteryMeta.originalSource) || 'estimated';
+                const performanceScore = inputs.performanceScore !== null && inputs.performanceScore !== undefined ? inputs.performanceScore : 75;
+                const osMissing = details.osMissing || (inputs.estimationMeta && inputs.estimationMeta.osMissing);
+                const osLabel = (inputs.osMetadata && inputs.osMetadata.label) || inputs.osVersion || 'Unknown';
+                const osReleaseYear = (inputs.osMetadata && inputs.osMetadata.releaseYear) || 'unknown';
+                
+                // Build breakdown rows - include OS: missing line when OS is missing
+                const breakdownRows = [];
+                
+                if (osMissing || details.components.ageFromOs === null) {
+                    breakdownRows.push({
+                        label: 'OS recency',
+                        value: 'N/A',
+                        note: 'OS: missing (used battery+perf fallback)'
+                    });
+                } else {
+                    breakdownRows.push({
+                        label: 'OS recency',
+                        value: `${details.components.ageFromOs.toFixed(1)} yrs`,
+                        note: `${osLabel} • Released ${osReleaseYear}`
+                    });
+                }
+                
+                breakdownRows.push({
+                    label: 'Battery wear',
+                    value: `${details.components.ageFromBattery.toFixed(1)} yrs`,
+                    note: `${dropPercent}% drop vs ~${Math.round(originalBattery)}mAh baseline (${batterySource})`
+                });
+                
+                breakdownRows.push({
+                    label: 'Performance',
+                    value: `${details.components.ageFromPerformance.toFixed(1)} yrs`,
+                    note: `${Math.round(performanceScore)}% performance score`
+                });
+                
+                // Log which fallbacks were used
+                const usedFallbacks = inputs.fallbacksUsed || [];
+                if (fallbackComputed) usedFallbacks.push('local-fallback-computation');
+                if (osMissing) usedFallbacks.push('os-missing-fallback');
+                
+                deviceAgeLog('Fallbacks used', usedFallbacks);
+                deviceAgeLog('Estimated fields', inputs.estimationMeta ? inputs.estimationMeta.estimatedFields : []);
+                deviceAgeLog('Discovered OS aliases', inputs.discoveredAliases || []);
+                deviceAgeLog('OS extracted', inputs.osExtracted || null);
+                deviceAgeLog('Helper used', helperUsed);
+                
+                if (valueEl && valueEl.parentNode) valueEl.textContent = details.formattedAge;
+                
+                // Show DATA ESTIMATED badge if any fallbacks were used or OS is missing
+                const showEstimatedBadge = fallbackComputed || (inputs.estimationMeta && inputs.estimationMeta.usedEstimation) || osMissing;
+                if (badgeEl && badgeEl.parentNode) {
+                    const ageLabel = details.numericAge >= 4 ? 'Aging device' : details.numericAge >= 2.5 ? 'Mature device' : details.numericAge >= 1.2 ? 'Holding up' : 'Fresh hardware';
+                    let badgeContent = showEstimatedBadge
+                        ? `${ageLabel}<span style="margin-left: 6px; padding: 0.15rem 0.5rem; font-size: 0.65rem; border-radius: 999px; border: 1px solid rgba(0,0,0,0.15); text-transform: uppercase;">DATA ESTIMATED</span>`
+                        : ageLabel;
+                    badgeEl.innerHTML = badgeContent;
+                    badgeEl.className = `health-status-badge ${details.numericAge >= 4 ? 'critical' : details.numericAge >= 2.5 ? 'moderate' : details.numericAge >= 1.2 ? 'good' : 'excellent'}`;
+                }
+                
+                // Step 4: Guard DOM updates - check parentNode before insertBefore, wrap in try-catch
+                try {
+                    if (fallbackEl && fallbackEl.parentNode) fallbackEl.style.display = 'none';
+                    if (card && card.parentNode) card.style.display = 'block';
+                    
+                    if (contentEl && inputs.estimationMeta && inputs.estimationMeta.usedEstimation) {
+                        contentEl.classList.add('device-age-estimation-active');
+                    } else if (contentEl) {
+                        contentEl.classList.remove('device-age-estimation-active');
+                    }
+                    
+                    // Guard breakdown rendering
+                    if (breakdownEl && breakdownEl.parentNode) {
+                        breakdownEl.innerHTML = breakdownRows.map(row => `
+                            <div class="device-age-factor" style="display: flex; justify-content: space-between; gap: var(--space-3); padding: var(--space-3); background: var(--bg-secondary); border-radius: var(--radius-md); align-items: flex-start;">
+                                <div>
+                                    <div style="font-weight: 600; color: var(--text-primary);">${row.label}</div>
+                                    <div style="font-size: var(--text-sm); color: var(--text-secondary);">${row.note}</div>
+                                </div>
+                                <div style="font-weight: 700; font-size: var(--text-lg); color: var(--text-primary); text-align: right;">${row.value}</div>
+                            </div>
+                        `).join('');
+                        breakdownEl.style.display = 'grid';
+                        
+                        // Guard breakdown note insertion - show when any fallbacks were used
+                        const existingNote = document.getElementById('device-age-estimation-note');
+                        const estimatedFieldsList = (inputs.estimationMeta && inputs.estimationMeta.estimatedFields) || [];
+                        if (showEstimatedBadge && estimatedFieldsList.length > 0) {
+                            // Build note text with explicit OS missing info
+                            let noteParts = [];
+                            if (osMissing) {
+                                noteParts.push('OS: missing (used battery+perf fallback)');
+                            }
+                            const otherFields = estimatedFieldsList.filter(f => f !== 'OS (missing)');
+                            if (otherFields.length > 0) {
+                                noteParts.push(otherFields.join(', '));
+                            }
+                            const noteText = `DATA ESTIMATED: ${noteParts.join('; ')}`;
+                            
+                            if (!existingNote) {
+                                const noteEl = document.createElement('div');
+                                noteEl.id = 'device-age-estimation-note';
+                                noteEl.style.padding = 'var(--space-3)';
+                                noteEl.style.background = 'rgba(251, 191, 36, 0.15)';
+                                noteEl.style.border = '1px dashed rgba(245, 158, 11, 0.4)';
+                                noteEl.style.borderRadius = 'var(--radius-md)';
+                                noteEl.style.fontSize = 'var(--text-xs)';
+                                noteEl.style.fontWeight = '600';
+                                noteEl.style.textTransform = 'uppercase';
+                                noteEl.style.letterSpacing = '0.05em';
+                                noteEl.style.marginTop = 'var(--space-3)';
+                                if (breakdownEl.parentNode) {
+                                    breakdownEl.appendChild(noteEl);
+                                    noteEl.innerHTML = noteText;
+                                }
+                            } else if (existingNote.parentNode) {
+                                existingNote.innerHTML = noteText;
+                            }
+                        } else if (existingNote && existingNote.parentNode) {
+                            existingNote.remove();
+                        }
+                    }
+                } catch (e) {
+                    deviceAgeLog('DOM update error (non-fatal)', e);
+                }
+                
+                // Step 5: Build verification summary with helper info and discovered aliases
+                const discoveredAliasesList = inputs.discoveredAliases || [];
+                const verification = {
+                    cardFound: !!card,
+                    cardCreated,
+                    formattedAge: details.formattedAge,
+                    discoveredAliases: discoveredAliasesList,
+                    osExtracted: inputs.osExtracted || null,
+                    usedFallbacks: usedFallbacks,
+                    helperUsed: helperUsed
+                };
+                
+                window.__latestDeviceAgeSummary = {
+                    inputs,
+                    details,
+                    verification
+                };
+                
+                deviceAgeLog('Device age render complete', {
+                    helperUsed,
+                    fallbackComputed,
+                    formattedAge: details.formattedAge,
+                    discoveredAliases: discoveredAliasesList.length,
+                    usedFallbacks: usedFallbacks.length,
+                    osExtracted: inputs.osExtracted || null
+                });
+                deviceAgeLog('Verification summary', verification);
+            }
+            
+            // Enhanced test function returning full diagnostic object
+            window.__testDeviceAge = function(inputs) {
+                if (!inputs) {
+                    return {
+                        formattedAge: null,
+                        numericAge: null,
+                        components: null,
+                        fallbacksUsed: ['no-payload'],
+                        error: 'No inputs provided'
+                    };
+                }
+                try {
+                    // Use inputs directly if it's already a processed inputs object, otherwise treat as raw payload
+                    const osVersion = inputs.osVersion || null;
+                    const originalBattery = inputs.originalBattery || 3500;
+                    const currentBattery = inputs.currentBattery || (originalBattery * 0.85);
+                    const performanceScore = inputs.performanceScore !== null && inputs.performanceScore !== undefined ? inputs.performanceScore : 75;
+                    
+                    const osMetadata = inputs.osMetadata || (osVersion ? extractOsMetadata(osVersion) : null);
+                    const osMissing = !osMetadata || !osMetadata.releaseYear;
+                    const weights = inputs.weights || (osMissing ? { os: 0, battery: 0.6, performance: 0.4 } : { os: 0.4, battery: 0.4, performance: 0.2 });
+                    
+                    const details = computeDeviceAgeDetails(
+                        osVersion,
+                        originalBattery,
+                        currentBattery,
+                        performanceScore,
+                        {
+                            osMetadata: osMetadata,
+                            weights: weights
+                        }
+                    );
+                    
+                    if (details) {
+                        return {
+                            formattedAge: details.formattedAge,
+                            numericAge: details.numericAge,
+                            components: details.components,
+                            fallbacksUsed: osMissing ? ['os-missing-fallback'] : [],
+                            osMetadata: details.osMetadata,
+                            osMissing: details.osMissing || false,
+                            weights: details.weights,
+                            osExtracted: osMetadata?.osMajor || osMetadata?.version || osVersion || null
+                        };
+                    } else {
+                        return {
+                            formattedAge: null,
+                            numericAge: null,
+                            components: null,
+                            fallbacksUsed: ['computation-returned-null'],
+                            error: 'computeDeviceAgeDetails returned null'
+                        };
+                    }
+                } catch (e) {
+                    return {
+                        formattedAge: null,
+                        numericAge: null,
+                        components: null,
+                        fallbacksUsed: ['exception-thrown'],
+                        error: e.message || String(e)
+                    };
+                }
+            };
+            
+            // Lightweight auto-renderer to keep Estimated Device Age card in sync (remove if debugging).
+            (function initDeviceAgeAutoRenderer() {
+                const MAX_ATTEMPTS = 12;
+                let attempts = 0;
+                
+                function tryRender(reason = 'auto') {
+                    const inputs = gatherDeviceAgeInputs();
+                    if (!inputs) {
+                        deviceAgeLog('auto-render', { reason, status: 'waiting-for-inputs', attempts });
+                        return false;
+                    }
+                    renderDeviceAgeCard();
+                    const verification = window.__latestDeviceAgeSummary && window.__latestDeviceAgeSummary.verification;
+                    deviceAgeLog('auto-render', { reason, status: 'rendered', verification });
+                    return true;
+                }
+                
+                window.__triggerDeviceAgeAutoRender = function(reason = 'manual') {
+                    tryRender(reason);
+                };
+                
+                const poll = setInterval(() => {
+                    attempts += 1;
+                    const hasData = window.mergedDeviceData || (templateDataPayload && Object.keys(templateDataPayload).length) || deviceInfo;
+                    if (hasData && tryRender('initial-poll')) {
+                        clearInterval(poll);
+                    } else if (attempts >= MAX_ATTEMPTS) {
+                        clearInterval(poll);
+                        deviceAgeLog('auto-render', { reason: 'initial-poll', status: 'max-attempts' });
+                    }
+                }, 600);
+                
+                document.addEventListener('device-age-recompute', () => tryRender('performance-update'));
+                document.addEventListener('device-age-verified', () => tryRender('verified-score'));
+                
+                // Watch for latestPerformanceScore changes
+                let lastPerformanceScore = window.latestPerformanceScore;
+                const performanceScoreWatcher = setInterval(() => {
+                    if (window.latestPerformanceScore !== lastPerformanceScore) {
+                        lastPerformanceScore = window.latestPerformanceScore;
+                        console.log('[DEVICE_AGE] Performance score changed, re-rendering');
+                        tryRender('performance-score-change');
+                    }
+                }, 500);
+                
+                // Cleanup watcher on page unload
+                window.addEventListener('beforeunload', () => {
+                    clearInterval(performanceScoreWatcher);
+                });
+                
+                // Run renderer once immediately after initialization
+                setTimeout(() => {
+                    tryRender('initial-render');
+                    const verification = window.__latestDeviceAgeSummary && window.__latestDeviceAgeSummary.verification;
+                    if (verification) {
+                        console.log('[DEVICE_AGE] Initial render verification:', verification);
+                    }
+                }, 100);
+            })();
             // Initialize About info panel
             if (isAboutDevice && deviceInfo) {
                 renderParsedAboutInfo();
@@ -2489,6 +3642,8 @@
                 document.body.removeChild(link);
                 URL.revokeObjectURL(url);
             };
+
+            renderDeviceAgeCard();
         });
         
         // Cleanup on page unload
