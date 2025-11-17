@@ -1,44 +1,4 @@
 {
-  "f5de2d9c54a94226": {
-    "session_id": "34827c1e-737e-4694-a33a-162b37b5993f",
-    "expires_at": "2025-11-17T14:49:14.027171"
-  },
-  "17bee0f5ec504ec3": {
-    "session_id": "34827c1e-737e-4694-a33a-162b37b5993f",
-    "expires_at": "2025-11-17T14:49:24.139518"
-  },
-  "bc603e43b0d64032": {
-    "session_id": "34827c1e-737e-4694-a33a-162b37b5993f",
-    "expires_at": "2025-11-17T14:50:16.693105"
-  },
-  "caf4adf16cd84c73": {
-    "session_id": "34827c1e-737e-4694-a33a-162b37b5993f",
-    "expires_at": "2025-11-17T14:50:17.345798"
-  },
-  "8ee83150da4a4f66": {
-    "session_id": "00b9c8ed-832c-40f9-bfcc-36f69ba8c57d",
-    "expires_at": "2025-11-17T14:52:49.838256"
-  },
-  "1b6e9fae65f04c29": {
-    "session_id": "00b9c8ed-832c-40f9-bfcc-36f69ba8c57d",
-    "expires_at": "2025-11-17T14:52:54.453948"
-  },
-  "9686e5c3453f496f": {
-    "session_id": "2a01aa98-4abb-4828-a474-97a88c2d2d1b",
-    "expires_at": "2025-11-17T18:07:35.307503"
-  },
-  "ed38c08ed7ff4939": {
-    "session_id": "2a01aa98-4abb-4828-a474-97a88c2d2d1b",
-    "expires_at": "2025-11-17T18:07:36.705441"
-  },
-  "7a4e596babcf4a7c": {
-    "session_id": "2a01aa98-4abb-4828-a474-97a88c2d2d1b",
-    "expires_at": "2025-11-17T18:07:37.889025"
-  },
-  "ac840d5e83e24e79": {
-    "session_id": "fe8a79a3-0f46-4e79-869a-3980f4b990c9",
-    "expires_at": "2025-11-17T19:50:45.096087"
-  },
   "998ba6d222f845d0": {
     "session_id": "114344d0-9ac0-47a2-ac7f-cc4e6ca53348",
     "expires_at": "2025-11-18T10:35:53.379168"
