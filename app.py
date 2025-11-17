@@ -11,7 +11,7 @@ import threading
 import time
 import queue
 from werkzeug.utils import secure_filename
-from utils.ocr_processor import extract_phone_info
+from utils.ocr_processor import extract_phone_info, extract_about_device_info
 from utils.predictor import predict_issue_and_solution
 from utils.log_generator import generate_device_log
 from datetime import datetime, timedelta
@@ -95,7 +95,10 @@ class SessionStore:
                     'createdAt': int(time.time() * 1000),  # milliseconds timestamp
                     'history': [],  # Rolling history of snapshots
                     'battery_samples': deque(maxlen=50),  # Time-ordered battery samples: {ts, pct, charging}
-                    'prediction': None  # Cached prediction result
+                    'prediction': None,  # Cached prediction result
+                    'device_info': None,  # OCR-parsed device info with confidence scores
+                    'about_info_confirmed': False,  # Whether user confirmed parsed About info
+                    'true_score': None  # Computed true health score
                 }
                 app.logger.info(f"Created session: {session_id}")
     
@@ -173,6 +176,39 @@ class SessionStore:
                     sess['history'] = sess['history'][-self.history_size:]
             # Broadcast to SSE subscribers
             self._broadcast(session_id, {'type': 'battery', 'data': live_data})
+    
+    def set_device_info(self, session_id, device_info):
+        """Store OCR-parsed device info with confidence scores"""
+        with self.lock:
+            if session_id not in self.sessions:
+                self.create_session(session_id)
+            sess = self.sessions[session_id]
+            sess['device_info'] = device_info
+            app.logger.info(f"Device info stored for session: {session_id}")
+            # Broadcast update
+            self._broadcast(session_id, {'type': 'device_info', 'data': device_info})
+    
+    def confirm_about_info(self, session_id, confirmed_data=None):
+        """Mark About device info as confirmed and optionally update values"""
+        with self.lock:
+            if session_id not in self.sessions:
+                return False
+            sess = self.sessions[session_id]
+            if confirmed_data:
+                # Update device_info with user-confirmed values
+                if sess.get('device_info'):
+                    sess['device_info'].update(confirmed_data)
+                    # Mark all confirmed fields as high confidence
+                    if 'ocr_confidence' not in sess['device_info']:
+                        sess['device_info']['ocr_confidence'] = {}
+                    for key in confirmed_data:
+                        if key != 'ocr_confidence':
+                            sess['device_info']['ocr_confidence'][key] = 1.0
+            sess['about_info_confirmed'] = True
+            app.logger.info(f"About info confirmed for session: {session_id}")
+            # Broadcast update
+            self._broadcast(session_id, {'type': 'session:update', 'data': {'about_info_confirmed': True}})
+            return True
     
     def _broadcast(self, session_id, message):
         """Broadcast message to all SSE subscribers for this session"""
@@ -488,6 +524,449 @@ def compute_performance_score(data):
     ))
     
     return clamp(performance_score, 0, 100)
+
+def compute_verified_score(session_id):
+    """
+    Compute verified health score from parsed About device info + live samples.
+    Component scores:
+    - BatteryScore (30%): if batteryCapacity present estimate wear → map to 0–100, 
+      else batteryScore = batteryPercent * 0.85 (penalize unknown health)
+    - StorageScore (30%): freePercent = (storageTotal - storageUsed)/storageTotal*100, 
+      storageScore = clamp(freePercent,0,100) (guard zero storageTotal)
+    - RAM+Responsiveness (20%): ramNorm = clamp((ramGB/8)*100,0,100), 
+      ramRespScore = 0.5*ramNorm + 0.5*responsivenessIndex
+    - OS/Updates (20%): osScore = 100 if recent, else 50 (unknown=50)
+    Final verifiedScore = clamp(0, 100, 0.3*batteryScore + 0.3*storageScore + 0.2*ramRespScore + 0.2*osScore)
+    """
+    sess = session_store.get_session(session_id)
+    if not sess:
+        return None
+    
+    device_info = sess.get('device_info')
+    if not device_info:
+        return None
+    
+    def clamp(v, lo, hi):
+        return max(lo, min(hi, v))
+    
+    # Get parsed fields (normalize field names)
+    device_name = device_info.get('device_name') or device_info.get('deviceName')
+    model = device_info.get('model')
+    ram_gb = device_info.get('ram_gb') or device_info.get('ramGB')
+    storage_total = device_info.get('storage_total_gb') or device_info.get('storageTotal')
+    storage_used = device_info.get('storage_used_gb') or device_info.get('storageUsed')
+    battery_percent = device_info.get('battery_percent') or device_info.get('batteryPercent')
+    battery_capacity = device_info.get('battery_capacity_mah') or device_info.get('batteryCapacity')
+    os_version = device_info.get('os_version') or device_info.get('osVersion')
+    
+    # Get responsiveness from snapshot
+    snapshot = sess.get('snapshot', {})
+    responsiveness_index = 50  # Default
+    if snapshot and 'responsiveness' in snapshot:
+        resp = snapshot['responsiveness']
+        if isinstance(resp, dict) and 'index' in resp:
+            responsiveness_index = float(resp['index'])
+        elif isinstance(resp, (int, float)):
+            responsiveness_index = float(resp)
+    
+    breakdown = {
+        'battery': {'score': 50, 'explanation': '', 'raw': {}, 'uses_fallback': False},
+        'storage': {'score': 50, 'explanation': '', 'raw': {}, 'uses_fallback': False},
+        'ram_responsiveness': {'score': 50, 'explanation': '', 'raw': {}, 'uses_fallback': False},
+        'os': {'score': 50, 'explanation': '', 'raw': {}, 'uses_fallback': False},
+        'verified_score': 50,
+        'timestamp': datetime.now().isoformat(),
+        'has_missing_fields': False
+    }
+    
+    # 1. Battery Score (30% weight)
+    battery_score = 50
+    uses_fallback = False
+    
+    if battery_capacity:
+        # Estimate expected capacity for model
+        expected_capacity = 4000  # Default
+        model_lower = (model or device_name or '').lower()
+        if 'galaxy' in model_lower or 'samsung' in model_lower:
+            expected_capacity = 4000
+        elif 'pixel' in model_lower:
+            expected_capacity = 4000
+        elif 'iphone' in model_lower:
+            expected_capacity = 3000
+        
+        # Estimate wear
+        if expected_capacity > 0:
+            wear_ratio = max(0, min(1, (expected_capacity - battery_capacity) / expected_capacity))
+            # Map wear to 0-100: 0% wear = 100, 50% wear = 50, 100% wear = 0
+            battery_health_score = (1 - wear_ratio) * 100
+            # Combine with battery percent if available
+            if battery_percent is not None:
+                battery_score = (battery_percent * 0.5) + (battery_health_score * 0.5)
+            else:
+                battery_score = battery_health_score
+            breakdown['battery']['explanation'] = f"Battery capacity: {battery_capacity}mAh (estimated {wear_ratio*100:.1f}% wear)"
+        else:
+            battery_score = battery_percent or 50
+            uses_fallback = True
+    elif battery_percent is not None:
+        # No capacity, penalize unknown health
+        battery_score = battery_percent * 0.85
+        uses_fallback = True
+        breakdown['battery']['explanation'] = f"Battery at {battery_percent}% (capacity unknown, using conservative estimate)"
+    else:
+        battery_score = 50
+        uses_fallback = True
+        breakdown['battery']['explanation'] = "Battery information not available"
+    
+    breakdown['battery']['score'] = round(clamp(battery_score, 0, 100), 1)
+    breakdown['battery']['uses_fallback'] = uses_fallback
+    breakdown['battery']['raw'] = {
+        'battery_percent': battery_percent,
+        'battery_capacity_mah': battery_capacity
+    }
+    
+    # 2. Storage Score (30% weight)
+    storage_score = 50
+    uses_fallback = False
+    
+    if storage_total and storage_total > 0:
+        if storage_used is not None:
+            free_percent = ((storage_total - storage_used) / storage_total) * 100
+            storage_score = clamp(free_percent, 0, 100)
+            breakdown['storage']['explanation'] = f"Storage: {free_percent:.1f}% free ({storage_used}GB used of {storage_total}GB)"
+        else:
+            storage_score = 50
+            uses_fallback = True
+            breakdown['storage']['explanation'] = f"Storage total: {storage_total}GB (usage unknown, using conservative estimate)"
+    else:
+        storage_score = 50
+        uses_fallback = True
+        breakdown['storage']['explanation'] = "Storage information not available"
+    
+    breakdown['storage']['score'] = round(clamp(storage_score, 0, 100), 1)
+    breakdown['storage']['uses_fallback'] = uses_fallback
+    breakdown['storage']['raw'] = {
+        'storage_total_gb': storage_total,
+        'storage_used_gb': storage_used
+    }
+    
+    # 3. RAM + Responsiveness (20% weight)
+    ram_resp_score = 50
+    uses_fallback = False
+    
+    if ram_gb:
+        ram_norm = clamp((ram_gb / 8) * 100, 0, 100)
+        ram_resp_score = 0.5 * ram_norm + 0.5 * responsiveness_index
+        breakdown['ram_responsiveness']['explanation'] = f"RAM: {ram_gb}GB ({ram_norm:.1f}/100), Responsiveness: {responsiveness_index:.1f}/100"
+    else:
+        ram_resp_score = 0.5 * 50 + 0.5 * responsiveness_index  # Default RAM = 50
+        uses_fallback = True
+        breakdown['ram_responsiveness']['explanation'] = f"RAM unknown (using default), Responsiveness: {responsiveness_index:.1f}/100"
+    
+    breakdown['ram_responsiveness']['score'] = round(clamp(ram_resp_score, 0, 100), 1)
+    breakdown['ram_responsiveness']['uses_fallback'] = uses_fallback
+    breakdown['ram_responsiveness']['raw'] = {
+        'ram_gb': ram_gb,
+        'responsiveness_index': responsiveness_index
+    }
+    
+    # 4. OS/Updates (20% weight)
+    os_score = 50
+    uses_fallback = False
+    
+    if os_version:
+        # Extract version number
+        version_match = re.search(r'(\d+(?:\.\d+)?)', str(os_version))
+        if version_match:
+            version_num = float(version_match.group(1))
+            if 'android' in str(os_version).lower():
+                # Android: 12+ = recent (100), 8-11 = 50-100, <8 = 50
+                if version_num >= 12:
+                    os_score = 100
+                elif version_num >= 8:
+                    os_score = 50 + ((version_num - 8) / 4.0) * 50
+                else:
+                    os_score = 50
+            else:  # iOS
+                # iOS: 15+ = recent (100), 12-14 = 50-100, <12 = 50
+                if version_num >= 15:
+                    os_score = 100
+                elif version_num >= 12:
+                    os_score = 50 + ((version_num - 12) / 3.0) * 50
+                else:
+                    os_score = 50
+            breakdown['os']['explanation'] = f"OS version: {os_version} (recent = 100, older = lower)"
+        else:
+            os_score = 50
+            uses_fallback = True
+            breakdown['os']['explanation'] = f"OS version: {os_version} (could not parse version)"
+    else:
+        os_score = 50
+        uses_fallback = True
+        breakdown['os']['explanation'] = "OS version information not available"
+    
+    breakdown['os']['score'] = round(clamp(os_score, 0, 100), 1)
+    breakdown['os']['uses_fallback'] = uses_fallback
+    breakdown['os']['raw'] = {
+        'os_version': os_version
+    }
+    
+    # Final verified score
+    verified_score = round(clamp(
+        0.3 * breakdown['battery']['score'] +
+        0.3 * breakdown['storage']['score'] +
+        0.2 * breakdown['ram_responsiveness']['score'] +
+        0.2 * breakdown['os']['score'],
+        0, 100
+    ))
+    
+    breakdown['verified_score'] = verified_score
+    breakdown['has_missing_fields'] = any([
+        breakdown['battery']['uses_fallback'],
+        breakdown['storage']['uses_fallback'],
+        breakdown['ram_responsiveness']['uses_fallback'],
+        breakdown['os']['uses_fallback']
+    ])
+    
+    # Store in session
+    sess['verified_score'] = breakdown
+    
+    # Log informative message
+    app.logger.info(f"[VERIFIED_SCORE] Computed for session {session_id}: {verified_score} (missing_fields: {breakdown['has_missing_fields']})")
+    if device_name or model:
+        app.logger.info(f"[VERIFIED_SCORE] Device: {device_name or model}, RAM: {ram_gb}GB, Storage: {storage_total}GB, Battery: {battery_percent}%/{battery_capacity}mAh")
+    
+    return breakdown
+
+def compute_true_score(session_id):
+    """
+    Compute true health score from verified device profile (OCR-parsed About device info).
+    Scoring algorithm:
+    - Battery Health (30%): battery_percent * 0.6 + (1 - estimated_wear_ratio) * 100 * 0.4
+    - Storage (30%): storage_free_pct with penalty for low total storage
+    - RAM/Responsiveness (20%): ram_score + CPU bonus
+    - OS/Updates (20%): version recency
+    Returns detailed breakdown JSON with per-metric scores and explanations.
+    """
+    sess = session_store.get_session(session_id)
+    if not sess:
+        return None
+    
+    device_info = sess.get('device_info')
+    if not device_info:
+        return None
+    
+    def clamp(v, lo, hi):
+        return max(lo, min(hi, v))
+    
+    # Get device info fields
+    battery_capacity_mah = device_info.get('battery_capacity_mah')
+    battery_percent = device_info.get('battery_percent')
+    storage_total_gb = device_info.get('storage_total_gb')
+    storage_used_gb = device_info.get('storage_used_gb')
+    storage_used_percent = device_info.get('storage_used_percent')
+    ram_gb = device_info.get('ram_gb')
+    os_version = device_info.get('os_version')
+    android_api = device_info.get('android_api_or_release')
+    cpu_model = device_info.get('cpu_model')
+    
+    # Get battery samples for trend analysis
+    battery_samples = list(sess.get('battery_samples', deque()))
+    
+    breakdown = {
+        'battery': {'score': 50, 'explanation': '', 'raw': {}},
+        'storage': {'score': 50, 'explanation': '', 'raw': {}},
+        'responsiveness': {'score': 50, 'explanation': '', 'raw': {}},
+        'os': {'score': 50, 'explanation': '', 'raw': {}},
+        'final_score': 50,
+        'timestamp': datetime.now().isoformat()
+    }
+    
+    # 1. Battery Health (30% weight)
+    battery_score = 50  # Default
+    estimated_wear_ratio = 0.0
+    
+    if battery_capacity_mah:
+        # Try to estimate expected capacity for model (simplified lookup)
+        # In production, this would use a device database
+        expected_capacity = None
+        model = device_info.get('model') or device_info.get('device_name', '').lower()
+        
+        # Simple heuristics for common models
+        if 'galaxy' in model or 'samsung' in model:
+            expected_capacity = 4000  # Typical Samsung
+        elif 'pixel' in model:
+            expected_capacity = 4000  # Typical Pixel
+        elif 'iphone' in model:
+            expected_capacity = 3000  # Typical iPhone
+        else:
+            expected_capacity = 4000  # Conservative default
+        
+        if expected_capacity:
+            estimated_wear_ratio = max(0, min(1, (expected_capacity - battery_capacity_mah) / expected_capacity))
+            battery_score = clamp(
+                (battery_percent or 50) * 0.6 + (1 - estimated_wear_ratio) * 100 * 0.4,
+                0, 100
+            )
+            breakdown['battery']['explanation'] = f"Battery at {battery_percent or 'unknown'}% with estimated {estimated_wear_ratio*100:.1f}% wear"
+        else:
+            battery_score = battery_percent or 50
+            breakdown['battery']['explanation'] = f"Battery at {battery_percent or 'unknown'}% (capacity wear unknown)"
+    elif battery_percent is not None:
+        # Use battery percent trend if available
+        if len(battery_samples) >= 2:
+            # Calculate drain rate
+            recent_samples = [s for s in battery_samples if not s.get('charging', False)][-5:]
+            if len(recent_samples) >= 2:
+                first_pct = recent_samples[0].get('pct')
+                last_pct = recent_samples[-1].get('pct')
+                if first_pct and last_pct:
+                    drain_rate = abs(first_pct - last_pct) / len(recent_samples)
+                    # Estimate wear from drain rate (higher drain = more wear)
+                    estimated_wear_ratio = min(0.5, drain_rate / 2.0)  # Cap at 50% wear estimate
+        
+        battery_score = clamp(
+            battery_percent * 0.6 + (1 - estimated_wear_ratio) * 100 * 0.4,
+            0, 100
+        )
+        breakdown['battery']['explanation'] = f"Battery at {battery_percent}% (estimated wear from drain trend: {estimated_wear_ratio*100:.1f}%)"
+    else:
+        breakdown['battery']['explanation'] = "Battery information not available"
+    
+    breakdown['battery']['score'] = round(battery_score, 1)
+    breakdown['battery']['raw'] = {
+        'battery_percent': battery_percent,
+        'battery_capacity_mah': battery_capacity_mah,
+        'estimated_wear_ratio': round(estimated_wear_ratio, 3)
+    }
+    
+    # 2. Storage Score (30% weight)
+    storage_score = 50  # Default
+    
+    if storage_total_gb and storage_used_gb is not None:
+        storage_free_pct = ((storage_total_gb - storage_used_gb) / storage_total_gb) * 100
+        storage_score = clamp(storage_free_pct, 0, 100)
+        
+        # Penalty for unusually low total storage
+        if storage_total_gb < 32:
+            storage_score = storage_score * 0.8  # 20% penalty
+            breakdown['storage']['explanation'] = f"Storage: {storage_free_pct:.1f}% free ({storage_total_gb}GB total, low capacity penalty applied)"
+        else:
+            breakdown['storage']['explanation'] = f"Storage: {storage_free_pct:.1f}% free ({storage_total_gb}GB total)"
+    elif storage_total_gb:
+        # Only total known, use conservative estimate
+        storage_score = 50
+        breakdown['storage']['explanation'] = f"Storage: {storage_total_gb}GB total (usage unknown, using conservative score)"
+    elif storage_used_percent is not None:
+        storage_free_pct = 100 - storage_used_percent
+        storage_score = clamp(storage_free_pct, 0, 100)
+        breakdown['storage']['explanation'] = f"Storage: {storage_free_pct:.1f}% free (total unknown)"
+    else:
+        breakdown['storage']['explanation'] = "Storage information not available"
+    
+    breakdown['storage']['score'] = round(storage_score, 1)
+    breakdown['storage']['raw'] = {
+        'storage_total_gb': storage_total_gb,
+        'storage_used_gb': storage_used_gb,
+        'storage_used_percent': storage_used_percent
+    }
+    
+    # 3. RAM/Responsiveness (20% weight)
+    responsiveness_score = 50  # Default
+    
+    if ram_gb:
+        # Expected RAM for device class (simplified)
+        expected_ram = 6.0  # Default expectation
+        model = device_info.get('model') or device_info.get('device_name', '').lower()
+        
+        # Adjust expected RAM based on model hints
+        if any(x in model for x in ['pro', 'ultra', 'plus', 'max']):
+            expected_ram = 8.0
+        elif any(x in model for x in ['lite', 'mini', 'se']):
+            expected_ram = 4.0
+        
+        ram_score = min(100, (ram_gb / expected_ram) * 100)
+        
+        # CPU bonus (simplified: more cores/threads = better)
+        cpu_bonus = 0
+        if cpu_model:
+            cpu_lower = cpu_model.lower()
+            if 'snapdragon 8' in cpu_lower or 'a17' in cpu_lower or 'a16' in cpu_lower:
+                cpu_bonus = 10
+            elif 'snapdragon 7' in cpu_lower or 'a15' in cpu_lower or 'a14' in cpu_lower:
+                cpu_bonus = 5
+        
+        # Get responsiveness from snapshot if available
+        snapshot = sess.get('snapshot', {})
+        responsiveness_index = None
+        if snapshot and 'responsiveness' in snapshot:
+            resp = snapshot['responsiveness']
+            if isinstance(resp, dict) and 'index' in resp:
+                responsiveness_index = float(resp['index'])
+            elif isinstance(resp, (int, float)):
+                responsiveness_index = float(resp)
+        
+        if responsiveness_index is not None:
+            # Average of RAM score and responsiveness index
+            responsiveness_score = (ram_score + responsiveness_index) / 2.0 + cpu_bonus
+            breakdown['responsiveness']['explanation'] = f"RAM: {ram_gb}GB ({ram_score:.1f}/100), Responsiveness: {responsiveness_index:.1f}/100, CPU bonus: +{cpu_bonus}"
+        else:
+            responsiveness_score = ram_score + cpu_bonus
+            breakdown['responsiveness']['explanation'] = f"RAM: {ram_gb}GB ({ram_score:.1f}/100), CPU bonus: +{cpu_bonus} (no live responsiveness data)"
+    else:
+        breakdown['responsiveness']['explanation'] = "RAM information not available"
+    
+    responsiveness_score = clamp(responsiveness_score, 0, 100)
+    breakdown['responsiveness']['score'] = round(responsiveness_score, 1)
+    breakdown['responsiveness']['raw'] = {
+        'ram_gb': ram_gb,
+        'cpu_model': cpu_model
+    }
+    
+    # 4. OS/Updates (20% weight)
+    os_score = 50  # Default
+    
+    if android_api:
+        # Android API level: 33 (Android 13) = 100, 21 (Android 5) = 0
+        os_score = clamp(((android_api - 21) / 12.0) * 100, 0, 100)
+        breakdown['os']['explanation'] = f"Android API level {android_api} (newer = better)"
+    elif os_version:
+        # Extract version number
+        version_match = re.search(r'(\d+(?:\.\d+)?)', str(os_version))
+        if version_match:
+            version_num = float(version_match.group(1))
+            if 'android' in str(os_version).lower():
+                # Android: 8-14 scale to 0-100
+                os_score = clamp(((version_num - 8) / 6.0) * 100, 0, 100)
+            else:  # iOS
+                # iOS: 12-17 scale to 0-100
+                os_score = clamp(((version_num - 12) / 5.0) * 100, 0, 100)
+            breakdown['os']['explanation'] = f"OS version: {os_version} (newer = better)"
+        else:
+            breakdown['os']['explanation'] = f"OS version: {os_version} (could not parse version number)"
+    else:
+        breakdown['os']['explanation'] = "OS version information not available"
+    
+    breakdown['os']['score'] = round(os_score, 1)
+    breakdown['os']['raw'] = {
+        'os_version': os_version,
+        'android_api_or_release': android_api
+    }
+    
+    # Final weighted score
+    final_score = round(
+        battery_score * 0.30 +
+        storage_score * 0.30 +
+        responsiveness_score * 0.20 +
+        os_score * 0.20
+    )
+    
+    breakdown['final_score'] = final_score
+    
+    # Store in session
+    sess['true_score'] = breakdown
+    
+    return breakdown
 
 def compute_prediction(session_data):
     """
@@ -939,33 +1418,85 @@ def upload_file():
         file.save(filepath)
         
         try:
-            # Extract phone information
-            phone_info = extract_phone_info(filepath)
+            # Check if this is an "About device" screenshot by running OCR
+            # and looking for common About device keywords
+            about_device_info = extract_about_device_info(filepath)
+            ocr_text = about_device_info.get('ocr_text', '').lower()
+            
+            # Detect if this is an About device screenshot
+            is_about_device = any(keyword in ocr_text for keyword in [
+                'about device', 'about phone', 'device name', 'model name',
+                'android version', 'android api', 'battery capacity', 'storage'
+            ])
+            
             session_id = str(uuid.uuid4())
             
-            # Get issue, solution and performance score
-            issue, solution, performance_score = predict_issue_and_solution(phone_info)
-            
-            # Add issue and solution to phone_info
-            phone_info['issue'] = issue
-            phone_info['solution'] = solution
-            
-            # Generate log file
-            log_filename = generate_device_log(phone_info, {'OCR_Results': 'Successful'})
-            
-            # Store session data
-            session['phone_info'] = phone_info
-            session['issue'] = issue
-            session['solution'] = solution
-            session['performance_score'] = performance_score
-            session['image_path'] = os.path.join('uploads', filename)
-            session['qr_session_id'] = session_id
-            session['log_file'] = log_filename
+            if is_about_device:
+                # This is an About device screenshot - use enhanced OCR
+                # Store device_info in session store
+                session_store.create_session(session_id)
+                session_store.set_device_info(session_id, about_device_info)
+                
+                # Check if we can auto-confirm (all required fields have confidence >= 0.80)
+                required_fields = ['device_name', 'ram_gb', 'storage_total_gb', 'os_version']
+                ocr_confidence = about_device_info.get('ocr_confidence', {})
+                auto_confirm = all(
+                    ocr_confidence.get(field, 0) >= 0.80 and about_device_info.get(field) is not None
+                    for field in required_fields
+                )
+                
+                if auto_confirm:
+                    session_store.confirm_about_info(session_id)
+                    # Compute verified score
+                    verified_score = compute_verified_score(session_id)
+                    if verified_score:
+                        app.logger.info(f"[UPLOAD] About device info auto-confirmed and verified score computed: {verified_score.get('verified_score', 0)}")
+                        # Broadcast verified score update
+                        session_store._broadcast(session_id, {'type': 'verified_score', 'data': verified_score})
+                
+                # Store in Flask session for backward compatibility
+                session['phone_info'] = {
+                    k: v for k, v in about_device_info.items() 
+                    if k not in ['ocr_text', 'ocr_confidence']
+                }
+                session['device_info'] = about_device_info
+                session['image_path'] = os.path.join('uploads', filename)
+                session['qr_session_id'] = session_id
+                session['is_about_device'] = True
+                session['about_info_confirmed'] = auto_confirm
+                
+                app.logger.info(f"About device screenshot processed for session {session_id}, auto-confirmed: {auto_confirm}")
+            else:
+                # Regular screenshot - use legacy extraction
+                phone_info = extract_phone_info(filepath)
+                
+                # Get issue, solution and performance score
+                issue, solution, performance_score = predict_issue_and_solution(phone_info)
+                
+                # Add issue and solution to phone_info
+                phone_info['issue'] = issue
+                phone_info['solution'] = solution
+                
+                # Generate log file
+                log_filename = generate_device_log(phone_info, {'OCR_Results': 'Successful'})
+                
+                # Store session data
+                session['phone_info'] = phone_info
+                session['issue'] = issue
+                session['solution'] = solution
+                session['performance_score'] = performance_score
+                session['image_path'] = os.path.join('uploads', filename)
+                session['qr_session_id'] = session_id
+                session['log_file'] = log_filename
+                session['is_about_device'] = False
             
             print(f"Session data stored: {session['qr_session_id']}")
             
-            return redirect(url_for('result'))
+            return redirect(url_for('result', session_id=session_id))
         except Exception as e:
+            app.logger.error(f"Error processing image: {str(e)}")
+            import traceback
+            traceback.print_exc()
             flash(f'Error processing image: {str(e)}')
             return redirect(request.url)
     
@@ -1080,6 +1611,22 @@ def result(session_id=None):
 
     is_https = is_secure_request()
     
+    # Get device_info from session store if available
+    device_info = None
+    is_about_device = False
+    about_info_confirmed = False
+    if qr_session_id:
+        sess = session_store.get_session(qr_session_id)
+        if sess:
+            device_info = sess.get('device_info')
+            is_about_device = device_info is not None
+            about_info_confirmed = sess.get('about_info_confirmed', False)
+    # Fallback to Flask session
+    if not device_info:
+        device_info = session.get('device_info')
+        is_about_device = session.get('is_about_device', False)
+        about_info_confirmed = session.get('about_info_confirmed', False)
+    
     return render_template(
         'result.html',
         phone_info=phone_info,
@@ -1091,7 +1638,10 @@ def result(session_id=None):
         recommendations=recommendations,
         image_path=image_path,
         session_id=qr_session_id,
-        is_https=is_https
+        is_https=is_https,
+        device_info=device_info,
+        is_about_device=is_about_device,
+        about_info_confirmed=about_info_confirmed
     )
 
 @app.route('/generate_qr')
@@ -1359,6 +1909,12 @@ def api_live_battery():
             # Broadcast prediction update
             session_store._broadcast(session_id, {'type': 'prediction', 'data': prediction})
             app.logger.debug(f"[PREDICTION] Recomputed for session {session_id}: {prediction.get('status', 'unknown')}, samples={prediction.get('sampleCount', 0)}")
+            
+            # Recompute verified score on non-charging battery updates
+            if not battery_data.get('charging', False) and sess.get('device_info'):
+                verified_score = compute_verified_score(session_id)
+                if verified_score:
+                    session_store._broadcast(session_id, {'type': 'verified_score', 'data': verified_score})
         
         # Add User-Agent Client Hints headers (HTTPS only)
         is_https = is_secure_request()
@@ -1539,6 +2095,142 @@ def debug_phone_data(session_id):
             'file_path': data_file,
             'available_files': os.listdir(os.path.join('static', 'phone_data')) if os.path.exists(os.path.join('static', 'phone_data')) else []
         })
+
+@app.route('/api/confirm-about-info/<session_id>', methods=['POST'])
+def api_confirm_about_info(session_id):
+    """Confirm or edit parsed About device info"""
+    try:
+        data = request.json or {}
+        confirmed_data = data.get('confirmed_data', {})
+        
+        # Confirm the About info
+        success = session_store.confirm_about_info(session_id, confirmed_data)
+        
+        if not success:
+            return jsonify({
+                'success': False,
+                'error': 'Session not found'
+            }), 404
+        
+        # Compute verified score after confirmation
+        score_breakdown = compute_verified_score(session_id)
+        
+        # Broadcast update
+        session_store._broadcast(session_id, {
+            'type': 'session:update',
+            'data': {
+                'about_info_confirmed': True,
+                'verified_score': score_breakdown
+            }
+        })
+        
+        return jsonify({
+            'success': True,
+            'message': 'About device info confirmed',
+            'verified_score': score_breakdown
+        })
+    except Exception as e:
+        app.logger.error(f"Error confirming About info: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/session/<session_id>/verified-score')
+def api_verified_score(session_id):
+    """Get computed verified health score for a session"""
+    try:
+        sess = session_store.get_session(session_id)
+        if not sess:
+            return jsonify({
+                'success': False,
+                'error': 'Session not found'
+            }), 404
+        
+        # Get cached score or compute new one if device_info exists
+        verified_score = sess.get('verified_score')
+        if not verified_score and sess.get('device_info'):
+            verified_score = compute_verified_score(session_id)
+        
+        return jsonify({
+            'success': True,
+            'verified_score': verified_score,
+            'about_info_confirmed': sess.get('about_info_confirmed', False)
+        })
+    except Exception as e:
+        app.logger.error(f"Error getting verified score: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/true-score/<session_id>')
+def api_true_score(session_id):
+    """Get computed true health score for a session (legacy endpoint)"""
+    try:
+        sess = session_store.get_session(session_id)
+        if not sess:
+            return jsonify({
+                'success': False,
+                'error': 'Session not found'
+            }), 404
+        
+        # Get cached score or compute new one
+        true_score = sess.get('true_score')
+        if not true_score and sess.get('about_info_confirmed'):
+            true_score = compute_true_score(session_id)
+        
+        return jsonify({
+            'success': True,
+            'true_score': true_score,
+            'about_info_confirmed': sess.get('about_info_confirmed', False)
+        })
+    except Exception as e:
+        app.logger.error(f"Error getting true score: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/debug/ocr/<session_id>')
+def debug_ocr(session_id):
+    """Debug route showing raw OCR text and parsed fields"""
+    try:
+        sess = session_store.get_session(session_id)
+        if not sess:
+            # Try Flask session
+            device_info = session.get('device_info')
+            if not device_info:
+                return jsonify({
+                    'success': False,
+                    'error': 'Session not found'
+                }), 404
+        else:
+            device_info = sess.get('device_info')
+            if not device_info:
+                return jsonify({
+                    'success': False,
+                    'error': 'No device info found for this session'
+                }), 404
+        
+        return jsonify({
+            'success': True,
+            'session_id': session_id,
+            'raw_ocr_text': device_info.get('ocr_text', ''),
+            'parsed_fields': {
+                k: v for k, v in device_info.items()
+                if k not in ['ocr_text', 'ocr_confidence']
+            },
+            'ocr_confidence': device_info.get('ocr_confidence', {}),
+            'about_info_confirmed': sess.get('about_info_confirmed', False) if sess else False,
+            'true_score': sess.get('true_score') if sess else None
+        })
+    except Exception as e:
+        app.logger.error(f"Error in debug OCR route: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 @app.route('/api/check_phone_data/<session_id>')
 def check_phone_data(session_id):

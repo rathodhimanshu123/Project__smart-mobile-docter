@@ -703,6 +703,37 @@
                             </div>
                 {% endif %}
                 
+                <!-- Parsed About Device Info Panel -->
+                {% if is_about_device or device_info %}
+                <div id="parsed-about-info-card" class="result-card animate-slide-up" style="animation-delay: 0.05s; margin-top: var(--space-4);">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <i class="fas fa-clipboard-check"></i>
+                        </div>
+                        <div>
+                            <h3>Parsed About Device Info</h3>
+                            <p style="margin: 0; color: var(--text-secondary); font-size: var(--text-sm);">Review and confirm the extracted device information</p>
+                        </div>
+                    </div>
+                    <div id="parsed-about-info-content" style="padding: var(--space-4);">
+                        <div id="parsed-fields-container">
+                            <!-- Fields will be populated by JavaScript -->
+                        </div>
+                        <div id="confirm-about-info-actions" style="margin-top: var(--space-4); display: flex; gap: var(--space-3);">
+                            <button id="confirm-about-info-btn" class="btn btn-primary" style="flex: 1;">
+                                <i class="fas fa-check"></i> Confirm & Calculate Score
+                            </button>
+                            <button id="edit-about-info-btn" class="btn btn-secondary" style="flex: 1;">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                        </div>
+                        <div id="about-info-status" style="margin-top: var(--space-3); padding: var(--space-3); border-radius: var(--radius-md); display: none;">
+                            <!-- Status message will be shown here -->
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+                
                 <div class="result-card animate-slide-up" style="animation-delay: 0.1s">
                     <div class="card-header">
                         <div class="card-icon">
@@ -757,21 +788,21 @@
                     </div>
                         </div>
                         
-                <!-- AI Health Diagnosis Section -->
-                <div id="ai-health-card" class="result-card animate-slide-up ai-health-card" style="animation-delay: 0.15s">
+                <!-- Live Performance Score Section -->
+                <div id="live-performance-card" class="result-card animate-slide-up ai-health-card" style="animation-delay: 0.12s">
                     <div class="card-header">
                         <div class="card-icon">
-                            <i class="fas fa-robot"></i>
+                            <i class="fas fa-tachometer-alt"></i>
                         </div>
                         <div>
-                            <h3>AI Health Diagnosis</h3>
-                            <p style="margin: 0; color: var(--text-secondary); font-size: var(--text-sm);">Real-time health analysis and smart recommendations</p>
+                            <h3>Live Performance Score</h3>
+                            <p style="margin: 0; color: var(--text-secondary); font-size: var(--text-sm);">Real-time score based on browser-exposed live metrics</p>
                         </div>
                     </div>
                     <div class="ai-health-content" style="padding: var(--space-6);">
                         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-4);">
                             <div>
-                                <div style="font-size: var(--text-sm); color: var(--text-secondary); margin-bottom: var(--space-2);">Health Score</div>
+                                <div style="font-size: var(--text-sm); color: var(--text-secondary); margin-bottom: var(--space-2);">Performance Score</div>
                                 <div style="font-size: 2.5rem; font-weight: 700; line-height: 1;">
                                     <span id="health-score-value">--</span>
                                 </div>
@@ -784,6 +815,46 @@
                             <div style="font-size: var(--text-sm); color: var(--text-secondary); margin-bottom: var(--space-2); font-weight: 600;">💡 Smart Recommendation</div>
                             <div id="health-recommendation" style="font-size: var(--text-base); line-height: 1.6; color: var(--text-primary);">
                                 Analyzing device metrics...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Verified Health Score Section -->
+                <div id="verified-score-card" class="result-card animate-slide-up" style="animation-delay: 0.15s; display: none;">
+                    <div class="card-header">
+                        <div class="card-icon">
+                            <i class="fas fa-shield-alt"></i>
+                        </div>
+                        <div>
+                            <h3>Verified Health Score</h3>
+                            <p style="margin: 0; color: var(--text-secondary); font-size: var(--text-sm);">Trusted score computed from parsed About device info + live samples</p>
+                        </div>
+                    </div>
+                    <div id="verified-score-content" style="padding: var(--space-6);">
+                        <div style="text-align: center; margin-bottom: var(--space-6);">
+                            <div style="font-size: var(--text-sm); color: var(--text-secondary); margin-bottom: var(--space-2);">Verified Health Score</div>
+                            <div id="verified-score-value" style="font-size: 3.5rem; font-weight: 700; line-height: 1; margin-bottom: var(--space-3);">--</div>
+                            <div id="verified-score-label" style="font-size: var(--text-lg); font-weight: 600; display: inline-block; padding: var(--space-2) var(--space-5); border-radius: var(--radius-full);"></div>
+                            <div id="verified-score-warning" style="margin-top: var(--space-3); padding: var(--space-2) var(--space-3); background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px; font-size: var(--text-sm); color: #856404; display: none;">
+                                <i class="fas fa-exclamation-triangle"></i> Some device info missing — score uses conservative estimates
+                            </div>
+                        </div>
+                        <div style="margin-top: var(--space-4); text-align: center;">
+                            <button id="show-verified-breakdown-btn" class="btn btn-primary" style="width: 100%;">
+                                <i class="fas fa-chart-bar"></i> Show Breakdown
+                            </button>
+                        </div>
+                        <div id="verified-breakdown-panel" style="display: none; margin-top: var(--space-4); padding: var(--space-4); background: var(--bg-secondary); border-radius: var(--radius-lg);">
+                            <h4 style="margin-bottom: var(--space-3); font-size: var(--text-base); font-weight: 600;">Component Scores</h4>
+                            <div id="verified-breakdown-metrics" style="display: grid; gap: var(--space-3);">
+                                <!-- Metrics will be populated by JavaScript -->
+                            </div>
+                            <div id="verified-raw-fields" style="margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--border-color);">
+                                <h4 style="margin-bottom: var(--space-3); font-size: var(--text-base); font-weight: 600;">Parsed About Device Fields</h4>
+                                <div id="verified-raw-fields-content" style="display: grid; gap: var(--space-2); font-size: var(--text-sm);">
+                                    <!-- Raw fields will be populated by JavaScript -->
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1029,45 +1100,6 @@
                         </div>
                     </div>
 
-                <div class="result-card animate-slide-up" style="animation-delay: 0.4s">
-                    <div class="card-header">
-                        <div class="card-icon">
-                            <i class="fas fa-chart-line"></i>
-                        </div>
-                        <div>
-                            <h3>Performance Score</h3>
-                            <p style="margin: 0; color: var(--text-secondary); font-size: var(--text-sm);">Overall device health</p>
-                        </div>
-                            </div>
-                    <div style="text-align: center;">
-                        <div style="font-size: var(--text-4xl); font-weight: var(--font-bold); color: var(--success-600); margin-bottom: var(--space-2);" id="performance-score-value">{{ performance_score }}%</div>
-                        <div class="status-badge status-success" id="performance-label">
-                            {% if performance_label %}{{ performance_label }}{% else %}
-                                {% if performance_score >= 85 %}Excellent
-                                {% elif performance_score >= 70 %}Good
-                                {% elif performance_score >= 50 %}Fair
-                                {% else %}Poor{% endif %}
-                        {% endif %}
-                                </div>
-                        <p style="margin-top: var(--space-4); font-size: var(--text-sm); color: var(--text-secondary);">Score computed from RAM (30%), Storage (30%), Battery (20%), and OS recency (20%).</p>
-                        <div style="margin-top: var(--space-4); padding: var(--space-3); background: #e3f2fd; border-left: 4px solid #1976d2; border-radius: 4px; font-size: var(--text-sm); color: #1565c0;">
-                            <strong>ℹ️ Note:</strong> Browsers do not expose true battery health (mAh/wear). We show live battery level + charging status on the web. 
-                            Full battery health would require a future add-on via a tiny Android native collector that posts to the same session.
-                            </div>
-                        {% if recommendations %}
-                        <div style="margin-top: var(--space-6); text-align: left;">
-                            <h4 style="margin-bottom: var(--space-3); font-size: var(--text-base);">Recommendations:</h4>
-                            <ul class="recommendations-list">
-                                {% for rec in recommendations %}
-                                <li>{{ rec }}</li>
-                                {% endfor %}
-                            </ul>
-                        </div>
-                        {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
         
         <div style="text-align: center; padding: var(--space-12) var(--space-6);">
             <div class="action-buttons">
@@ -1602,6 +1634,14 @@
                                 window.SmartDiagnosis.updateSmartDiagnosis(currentSnapshot);
                             }
                         }
+                    } else if (data.type === 'verified_score' && data.data) {
+                        // Verified score update
+                        renderVerifiedScore(data.data);
+                    } else if (data.type === 'session:update' && data.data) {
+                        // Session update (e.g., About info confirmed)
+                        if (data.data.verified_score) {
+                            renderVerifiedScore(data.data.verified_score);
+                        }
                     }
                 } catch (error) {
                     console.error('[DASHBOARD] Error parsing SSE message:', error);
@@ -2133,6 +2173,282 @@
                 });
             }
 
+            // About Device Info Handling
+            const deviceInfo = {{ (device_info | tojson) if device_info else 'null' }};
+            const isAboutDevice = {{ 'true' if is_about_device else 'false' }};
+            const aboutInfoConfirmed = {{ 'true' if about_info_confirmed else 'false' }};
+            
+            function renderParsedAboutInfo() {
+                const container = document.getElementById('parsed-fields-container');
+                if (!container || !deviceInfo) return;
+                
+                const fields = [
+                    { key: 'device_name', label: 'Device Name', type: 'text' },
+                    { key: 'model', label: 'Model', type: 'text' },
+                    { key: 'manufacturer', label: 'Manufacturer', type: 'text' },
+                    { key: 'ram_gb', label: 'RAM (GB)', type: 'number' },
+                    { key: 'storage_total_gb', label: 'Storage Total (GB)', type: 'number' },
+                    { key: 'storage_used_gb', label: 'Storage Used (GB)', type: 'number' },
+                    { key: 'battery_capacity_mah', label: 'Battery Capacity (mAh)', type: 'number' },
+                    { key: 'battery_percent', label: 'Battery Percent (%)', type: 'number' },
+                    { key: 'os_version', label: 'OS Version', type: 'text' },
+                    { key: 'android_api_or_release', label: 'Android API Level', type: 'number' },
+                    { key: 'screen_size_cm', label: 'Screen Size (cm)', type: 'number' },
+                    { key: 'cpu_model', label: 'CPU Model', type: 'text' },
+                    { key: 'camera_info', label: 'Camera Info', type: 'text' }
+                ];
+                
+                const ocrConfidence = deviceInfo.ocr_confidence || {};
+                const isEditMode = container.dataset.editMode === 'true';
+                
+                container.innerHTML = fields.map(field => {
+                    const value = deviceInfo[field.key];
+                    const confidence = ocrConfidence[field.key] || 0;
+                    const isLowConfidence = confidence < 0.80 && value !== null && value !== undefined;
+                    const displayValue = value !== null && value !== undefined ? value : '';
+                    
+                    return `
+                        <div class="parsed-field" style="margin-bottom: var(--space-3); padding: var(--space-3); border-radius: var(--radius-md); ${isLowConfidence ? 'background: #fff3cd; border-left: 4px solid #ffc107;' : 'background: var(--bg-secondary);'}">
+                            <label style="display: block; font-weight: 600; margin-bottom: var(--space-2); color: var(--text-primary);">
+                                ${field.label}
+                                ${isLowConfidence ? '<span style="color: #ffc107; font-size: 0.875rem;">(Low Confidence)</span>' : ''}
+                                ${confidence > 0 ? `<span style="color: var(--text-secondary); font-size: 0.75rem; font-weight: normal;">(${Math.round(confidence * 100)}%)</span>` : ''}
+                            </label>
+                            ${isEditMode ? 
+                                `<input type="${field.type}" class="form-input" data-field="${field.key}" value="${displayValue}" style="width: 100%; padding: var(--space-2); border: 1px solid var(--border-color); border-radius: var(--radius-sm);">` :
+                                `<div style="color: var(--text-primary);">${displayValue || '<em style="color: var(--text-secondary);">Not detected</em>'}</div>`
+                            }
+                        </div>
+                    `;
+                }).join('');
+            }
+            
+            async function confirmAboutInfo() {
+                const btn = document.getElementById('confirm-about-info-btn');
+                const statusDiv = document.getElementById('about-info-status');
+                const container = document.getElementById('parsed-fields-container');
+                const isEditMode = container.dataset.editMode === 'true';
+                
+                try {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Confirming...';
+                    
+                    let confirmedData = {};
+                    if (isEditMode) {
+                        // Collect edited values
+                        const inputs = container.querySelectorAll('input[data-field]');
+                        inputs.forEach(input => {
+                            const key = input.dataset.field;
+                            const value = input.value.trim();
+                            if (value) {
+                                if (input.type === 'number') {
+                                    confirmedData[key] = parseFloat(value) || null;
+                                } else {
+                                    confirmedData[key] = value;
+                                }
+                            }
+                        });
+                    }
+                    
+                    const response = await fetch(`/api/confirm-about-info/${sessionId}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ confirmed_data: confirmedData })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        statusDiv.style.display = 'block';
+                        statusDiv.style.background = '#d4edda';
+                        statusDiv.style.color = '#155724';
+                        statusDiv.innerHTML = '<i class="fas fa-check-circle"></i> About device info confirmed! Calculating health score...';
+                        
+                        // Hide confirm/edit buttons
+                        document.getElementById('confirm-about-info-actions').style.display = 'none';
+                        
+                        // Load and display verified score
+                        await loadVerifiedScore();
+                    } else {
+                        throw new Error(result.error || 'Failed to confirm');
+                    }
+                } catch (error) {
+                    console.error('Error confirming About info:', error);
+                    statusDiv.style.display = 'block';
+                    statusDiv.style.background = '#f8d7da';
+                    statusDiv.style.color = '#721c24';
+                    statusDiv.innerHTML = `<i class="fas fa-exclamation-circle"></i> Error: ${error.message}`;
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-check"></i> Confirm & Calculate Score';
+                }
+            }
+            
+            async function loadVerifiedScore() {
+                try {
+                    const response = await fetch(`/api/session/${sessionId}/verified-score`);
+                    const result = await response.json();
+                    
+                    if (result.success && result.verified_score) {
+                        renderVerifiedScore(result.verified_score);
+                    }
+                } catch (error) {
+                    console.error('Error loading verified score:', error);
+                }
+            }
+            
+            function renderVerifiedScore(breakdown) {
+                const card = document.getElementById('verified-score-card');
+                const scoreValue = document.getElementById('verified-score-value');
+                const scoreLabel = document.getElementById('verified-score-label');
+                const warningDiv = document.getElementById('verified-score-warning');
+                const metricsContainer = document.getElementById('verified-breakdown-metrics');
+                const rawFieldsContainer = document.getElementById('verified-raw-fields-content');
+                
+                if (!card || !breakdown) return;
+                
+                const verifiedScore = breakdown.verified_score || 0;
+                let label = 'Unknown';
+                let labelClass = '';
+                let colorBand = '#6b7280'; // gray
+                
+                if (verifiedScore >= 80) {
+                    label = 'Excellent';
+                    labelClass = 'excellent';
+                    colorBand = '#10b981'; // green
+                } else if (verifiedScore >= 60) {
+                    label = 'Good';
+                    labelClass = 'good';
+                    colorBand = '#3b82f6'; // blue
+                } else if (verifiedScore >= 40) {
+                    label = 'Moderate';
+                    labelClass = 'moderate';
+                    colorBand = '#f59e0b'; // yellow
+                } else {
+                    label = 'Needs Attention';
+                    labelClass = 'critical';
+                    colorBand = '#ef4444'; // red
+                }
+                
+                scoreValue.textContent = verifiedScore;
+                scoreValue.style.color = colorBand;
+                scoreLabel.textContent = label;
+                scoreLabel.className = `health-status-badge ${labelClass}`;
+                scoreLabel.style.display = 'inline-block';
+                scoreLabel.style.padding = 'var(--space-2) var(--space-5)';
+                scoreLabel.style.borderRadius = 'var(--radius-full)';
+                
+                // Show warning if missing fields
+                if (breakdown.has_missing_fields) {
+                    warningDiv.style.display = 'block';
+                } else {
+                    warningDiv.style.display = 'none';
+                }
+                
+                // Render component scores
+                const metrics = [
+                    { key: 'battery', label: 'Battery Health', weight: '30%', icon: 'fa-battery-three-quarters' },
+                    { key: 'storage', label: 'Storage', weight: '30%', icon: 'fa-hdd' },
+                    { key: 'ram_responsiveness', label: 'RAM/Responsiveness', weight: '20%', icon: 'fa-tachometer-alt' },
+                    { key: 'os', label: 'OS/Updates', weight: '20%', icon: 'fa-mobile-alt' }
+                ];
+                
+                metricsContainer.innerHTML = metrics.map(metric => {
+                    const metricData = breakdown[metric.key] || {};
+                    const score = metricData.score || 0;
+                    const explanation = metricData.explanation || 'No data available';
+                    const usesFallback = metricData.uses_fallback || false;
+                    
+                    return `
+                        <div style="padding: var(--space-3); background: var(--bg-secondary); border-radius: var(--radius-md); ${usesFallback ? 'border-left: 3px solid #ffc107;' : ''}">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--space-2);">
+                                <div style="display: flex; align-items: center; gap: var(--space-2);">
+                                    <i class="fas ${metric.icon}" style="color: var(--primary-color);"></i>
+                                    <strong>${metric.label}</strong>
+                                    <span style="color: var(--text-secondary); font-size: 0.875rem;">(${metric.weight})</span>
+                                    ${usesFallback ? '<span style="color: #ffc107; font-size: 0.75rem;" title="Using conservative estimate">⚠</span>' : ''}
+                                </div>
+                                <div style="font-size: 1.5rem; font-weight: 700; color: var(--primary-color);">${score.toFixed(1)}</div>
+                            </div>
+                            <div style="color: var(--text-secondary); font-size: 0.875rem;">${explanation}</div>
+                        </div>
+                    `;
+                }).join('');
+                
+                // Render raw parsed fields
+                if (deviceInfo) {
+                    const rawFields = [
+                        { key: 'device_name', label: 'Device Name' },
+                        { key: 'model', label: 'Model' },
+                        { key: 'manufacturer', label: 'Manufacturer' },
+                        { key: 'ram_gb', label: 'RAM (GB)' },
+                        { key: 'storage_total_gb', label: 'Storage Total (GB)' },
+                        { key: 'storage_used_gb', label: 'Storage Used (GB)' },
+                        { key: 'battery_capacity_mah', label: 'Battery Capacity (mAh)' },
+                        { key: 'battery_percent', label: 'Battery Percent (%)' },
+                        { key: 'os_version', label: 'OS Version' },
+                        { key: 'android_api_or_release', label: 'Android API Level' },
+                        { key: 'screen_size_cm', label: 'Screen Size (cm)' },
+                        { key: 'cpu_model', label: 'CPU Model' },
+                        { key: 'camera_info', label: 'Camera Info' }
+                    ];
+                    
+                    rawFieldsContainer.innerHTML = rawFields.map(field => {
+                        const value = deviceInfo[field.key];
+                        return `
+                            <div style="display: flex; justify-content: space-between; padding: var(--space-2); border-bottom: 1px solid var(--border-color);">
+                                <span style="color: var(--text-secondary);">${field.label}:</span>
+                                <strong style="color: var(--text-primary);">${value !== null && value !== undefined ? value : '<em style="color: var(--text-secondary);">Not detected</em>'}</strong>
+                            </div>
+                        `;
+                    }).join('');
+                }
+                
+                card.style.display = 'block';
+                
+                // Store breakdown for breakdown panel
+                window.verifiedScoreBreakdown = breakdown;
+            }
+            
+            // Initialize About info panel
+            if (isAboutDevice && deviceInfo) {
+                renderParsedAboutInfo();
+                
+                const confirmBtn = document.getElementById('confirm-about-info-btn');
+                const editBtn = document.getElementById('edit-about-info-btn');
+                
+                if (confirmBtn) {
+                    confirmBtn.addEventListener('click', confirmAboutInfo);
+                }
+                
+                if (editBtn) {
+                    editBtn.addEventListener('click', () => {
+                        const container = document.getElementById('parsed-fields-container');
+                        container.dataset.editMode = container.dataset.editMode === 'true' ? 'false' : 'true';
+                        renderParsedAboutInfo();
+                    });
+                }
+                
+                // If already confirmed, load verified score
+                if (aboutInfoConfirmed) {
+                    loadVerifiedScore();
+                    document.getElementById('confirm-about-info-actions').style.display = 'none';
+                }
+            }
+            
+            // Verified score breakdown panel toggle
+            const showBreakdownBtn = document.getElementById('show-verified-breakdown-btn');
+            const breakdownPanel = document.getElementById('verified-breakdown-panel');
+            if (showBreakdownBtn && breakdownPanel) {
+                showBreakdownBtn.addEventListener('click', () => {
+                    const isVisible = breakdownPanel.style.display !== 'none';
+                    breakdownPanel.style.display = isVisible ? 'none' : 'block';
+                    showBreakdownBtn.innerHTML = isVisible 
+                        ? '<i class="fas fa-chart-bar"></i> Show Breakdown'
+                        : '<i class="fas fa-chevron-up"></i> Hide Breakdown';
+                });
+            }
+            
             // Recheck Data function
             window.recheckData = async function() {
                 const btn = document.getElementById('recheck-btn');
@@ -2184,3 +2500,4 @@
     </script>
 </body>
 </html>
+

@@ -278,14 +278,48 @@ The APK will be created at: `app/build/outputs/apk/debug/app-debug.apk`
 - 🔑 **Device ID** (IMEI or Android ID)
 - 🌍 **Language & Timezone**
 
+## Health Score System
+
+The application displays **two distinct health scores** to provide comprehensive device health assessment:
+
+### (A) Live Performance Score
+- **Source**: Real-time browser-exposed live metrics
+- **Computation**: Based on RAM (30%), Storage (30%), Battery (20%), and OS recency (20%)
+- **Updates**: Automatically updates as live data changes via SSE
+- **Use Case**: Quick real-time assessment based on current browser-accessible metrics
+- **Limitations**: Uses browser sandbox storage (not full device storage) and approximate RAM values
+
+### (B) Verified Health Score
+- **Source**: Trusted score computed from parsed "About device" screenshot + live samples
+- **Computation**: 
+  - **Battery Health (30%)**: If battery capacity (mAh) is present, estimates wear and maps to 0-100. Otherwise, uses battery percent × 0.85 (penalizes unknown health)
+  - **Storage (30%)**: Free percentage = (storageTotal - storageUsed)/storageTotal × 100, clamped to 0-100
+  - **RAM+Responsiveness (20%)**: RAM normalized to 8GB baseline, combined 50/50 with live responsiveness index
+  - **OS/Updates (20%)**: Recent OS versions (Android 12+, iOS 15+) score 100, older versions score 50-100
+- **Updates**: Recomputes on (a) successful About-parsing uploads and (b) every new non-charging battery SSE update
+- **Use Case**: Accurate health assessment based on verified device specifications
+- **Features**: 
+  - Shows breakdown panel with component scores and raw parsed fields
+  - Displays warning tooltip when fallback logic is used (missing device info)
+  - Color-coded score display (green/yellow/red bands)
+
+### Difference Between Scores:
+- **Live Performance Score**: Real-time, based on browser-exposed metrics (approximate, limited by browser security)
+- **Verified Health Score**: Computed from verified device profile (accurate, based on About device screenshot + live samples)
+
+### API Endpoints:
+- `GET /api/session/<session_id>/verified-score` - Get verified health score breakdown
+- Verified score updates are broadcast over SSE as `verified_score` events
+
 ## Technical Implementation:
 
 ### Files Modified:
-1. **`app.py`** - Enhanced QR generation with LAN IP, deep link support
+1. **`app.py`** - Enhanced QR generation with LAN IP, deep link support, verified score computation
 2. **`templates/mobile.html`** - Auto-attempts to open native app
 3. **`static/js/mobile.js`** - Maximum browser data collection
-4. **`templates/result.html`** - Shows both app deep link and HTTP link
-5. **Android App Files** - Native device information collection
+4. **`templates/result.html`** - Shows both app deep link and HTTP link, displays two score cards
+5. **`utils/ocr_processor.py`** - Enhanced OCR parsing with confidence scores
+6. **Android App Files** - Native device information collection
 
 ### Key Features:
 - **Dual Mode**: Browser fallback + Native app enhancement
